@@ -1,0 +1,436 @@
+Project Overview
+
+Build a modern, professional web application called CargoBridge (name can be changed) for managing goods transported from China to Algeria through individual transport agents.
+
+The system is used by two business owners:
+
+- China Admin (creates goods records and assigns them to agents)
+- Algeria Admin (tracks expected goods and confirms arrivals)
+
+The transportation model is not traditional shipping. Goods are transported through agents/travelers who carry goods from China to Algeria.
+
+The objective of the system is to provide complete visibility over:
+
+- What goods are expected
+- Which agent is responsible
+- Goods status
+- Estimated departure and arrival dates
+- Communication between both sides
+- Scan-based tracking using camera functionality
+
+Development Strategy
+
+The application must be designed in two phases.
+
+Phase 1
+
+Frontend only.
+
+Requirements:
+
+- Use React + TypeScript
+- Use Tailwind CSS
+- Use shadcn/ui components
+- Store all data in Local Storage
+- Simulate backend operations
+- Create realistic mock data
+- Build all screens and workflows
+- Ensure every feature works using local state and Local Storage
+
+Phase 2
+
+Backend migration.
+
+The UI must be designed so that Local Storage can later be replaced by:
+
+- Supabase
+- PostgreSQL
+- Authentication
+- Realtime updates
+- File storage
+
+Important:
+
+Create a clean service layer abstraction so that data sources can easily be swapped from Local Storage to Supabase without changing the UI.
+
+Example:
+
+- goodsService
+- agentService
+- chatService
+- userService
+
+Language Requirements
+
+This is a critical requirement.
+
+The system must be designed with multilingual support from the beginning.
+
+Default language:
+
+- Arabic (RTL)
+
+Secondary language:
+
+- French (LTR)
+
+Requirements:
+
+- Arabic must be the default language throughout the application.
+- The entire UI should be optimized for RTL layouts.
+- Users can switch between Arabic and French from the settings or header.
+- All labels, navigation items, forms, tables, notifications, and messages must support localization.
+- Build the system using a proper i18n architecture so additional languages can be added later.
+- All mock data and UI examples should primarily use Arabic content.
+
+User Roles
+
+China Admin
+
+Can:
+
+- Create goods records
+- Assign agents
+- Add goods details
+- Generate tracking numbers
+- Upload goods photos
+- Update status
+- Send messages
+
+Algeria Admin
+
+Can:
+
+- View incoming goods
+- Search tracking numbers
+- Scan QR codes
+- Confirm arrivals
+- View agent information
+- Send messages
+- View reports and statistics
+
+Main Navigation
+
+The navigation must be intentionally minimalist.
+
+Only include the most essential operational sections:
+
+1. Dashboard (لوحة التحكم)
+2. Goods (السلع)
+3. Agents (الوكلاء)
+4. Scanner (الماسح)
+5. Chat (المحادثات)
+6. Settings (الإعدادات)
+
+Avoid unnecessary menu items and keep the interface clean and focused.
+
+Additional functionality such as reports, notifications, and tracking can be integrated into existing pages instead of creating separate navigation entries.
+
+Dashboard Page
+
+The dashboard should provide a complete overview.
+
+Widgets:
+
+- Total Goods Records
+- Expected Arrivals
+- Delivered Goods
+- Delayed Goods
+- Active Agents
+- Pending Confirmations
+
+Charts:
+
+- Monthly Goods Volume
+- Delivery Performance
+- Agent Performance
+
+Recent Activity Feed:
+
+Examples:
+
+- Goods registered
+- Agent assigned
+- Goods delivered
+- New message received
+
+Goods Management Module
+
+This is the core module of the entire system.
+
+Create a complete goods management system.
+
+Goods fields:
+
+- Tracking Number
+- Goods Description (سلعة)
+- Category
+- Quantity
+- Responsible Agent
+- Status
+- Creation Date
+- Departure Date
+- Expected Arrival Date
+- Arrival Date
+- Priority
+- Notes
+
+Goods Statuses:
+
+- Draft
+- Assigned
+- Ready For Departure
+- In Transit
+- Arrived
+- Delivered
+- Delayed
+- Cancelled
+
+Features:
+
+- Create goods record
+- Edit goods record
+- Delete goods record
+- Search goods
+- Filter goods
+- View details
+
+Goods details should include:
+- Assigned agent
+- Timeline
+- Attached photos
+- Notes
+- Quantity and details
+
+Manifest Module (Inside Goods Section)
+
+This is one of the most important operational views.
+
+Create a manifest page showing all goods assigned to a specific agent.
+
+Example:
+
+Agent Ahmed
+
+- Departure: China
+- Arrival: Algeria
+- 7 Goods Records Assigned
+- Total Quantity
+- Status
+
+The manifest should allow both admins to quickly understand who is responsible for which goods.
+
+Agent Management Module
+
+Create a complete agent management page.
+
+Agent fields:
+
+- Full Name
+- Phone Number
+- Passport Number
+- Country
+- Current Status
+- Reliability Score
+- Total Deliveries
+- Delayed Deliveries
+
+Agent statuses:
+
+- Active
+- Traveling
+- Delivered
+- Delayed
+- Inactive
+
+Agent profile page should contain:
+
+- Personal information
+- Assigned goods
+- Delivery history
+- Performance statistics
+
+Scanner Module
+
+This is a core feature.
+
+Create a camera scanner page.
+
+Requirements:
+
+- Camera preview UI
+- QR scanning interface
+- Barcode scanning interface
+- Mock scanning functionality
+
+When a QR code is scanned:
+
+Display:
+
+- Tracking Number
+- Goods Description
+- Responsible Agent
+- Status
+- Departure Date
+- Expected Arrival Date
+- Notes
+- Quantity Information
+
+The scanner must immediately show who is responsible for the goods and where they currently are in the process.
+
+The UI should feel similar to warehouse and logistics scanning systems.
+
+Chat Module
+
+This is a mandatory feature.
+
+Build a modern chat interface between China Admin and Algeria Admin.
+
+Features:
+
+- Conversation list
+- Message history
+- Typing area
+- Attachments section
+- Voice message placeholder
+- Image sharing placeholder
+- Search messages
+
+Prepare the UI for future realtime messaging.
+
+Use modern messaging layouts similar to WhatsApp Business or Slack.
+
+Notifications
+
+Do not create a separate navigation page.
+
+Instead, include notifications within the dashboard and header.
+
+Examples:
+
+- Goods delayed
+- Goods arrived
+- Agent assigned
+- New message received
+
+Notification categories:
+
+- Goods
+- Agent
+- Chat
+- System
+
+Reports & Analytics
+
+Do not create a separate navigation page.
+
+Integrate analytics directly into the dashboard.
+
+Include:
+
+- Delivery Success Rate
+- Agent Performance
+- Monthly Goods Volume
+- Delayed Goods Analysis
+
+Display:
+
+- Charts
+- Tables
+- Summary Cards
+
+Settings Module
+
+Settings sections:
+
+- Company Information
+- User Preferences
+- Theme Settings
+- Notification Settings
+- Language Settings
+- Data Management
+
+Include:
+
+- Arabic Language (Default)
+- French Language
+- Light Mode
+- Dark Mode
+
+UI Design Requirements
+
+Design style:
+
+- Professional logistics platform
+- Enterprise SaaS quality
+- Modern dashboard aesthetic
+- Responsive for desktop and tablet
+- Clean typography
+- Smooth animations
+- Consistent spacing
+- Arabic-first experience
+
+Use:
+
+- Tailwind CSS
+- shadcn/ui
+- Lucide Icons
+
+The application should feel designed primarily for Arabic-speaking business users.
+
+Technical Requirements
+
+Folder Structure:
+
+src/
+├── components/
+├── pages/
+├── layouts/
+├── hooks/
+├── services/
+├── store/
+├── types/
+├── mock-data/
+├── utils/
+├── locales/
+
+State Management:
+
+- Zustand preferred
+
+Localization:
+
+- i18next preferred
+- Full RTL support
+- Language switcher support
+
+Data Layer:
+
+Create a fake repository layer:
+
+- goodsService
+- agentService
+- chatService
+- notificationService
+
+All services should use Local Storage.
+
+Design them so they can later be replaced with Supabase implementations.
+
+Deliverables
+
+Generate:
+
+1. Complete React application structure
+2. Routing setup
+3. All page layouts
+4. Reusable components
+5. Mock data
+6. Zustand stores
+7. Local Storage services
+8. Responsive UI
+9. Dark mode support
+10. Arabic and French localization support
+11. Fully navigable frontend prototype
+
+The goal is to produce a frontend that looks like a real production logistics platform, is optimized for Arabic users, and can later be connected to Supabase with minimal code changes.
