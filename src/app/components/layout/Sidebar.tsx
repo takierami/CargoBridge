@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router'
 import {
   LayoutDashboard, Package, Users, ScanLine, Calculator,
-  Settings, X, ChevronLeft, ChevronRight,
+  Settings, X, ChevronLeft, ChevronRight, Truck,
 } from 'lucide-react'
 import { useAppStore } from '../../../store/appStore'
 import { cn } from '../../utils/cn'
@@ -13,6 +13,7 @@ export function Sidebar() {
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: t('nav.dashboard'), end: true },
     { to: '/goods', icon: Package, label: t('nav.goods') },
+    { to: '/suppliers', icon: Truck, label: t('nav.suppliers') },
     { to: '/agents', icon: Users, label: t('nav.agents') },
     { to: '/scanner', icon: ScanLine, label: t('nav.scanner') },
     { to: '/calculator', icon: Calculator, label: t('nav.calculator') },

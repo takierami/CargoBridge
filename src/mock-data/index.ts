@@ -1,4 +1,4 @@
-import type { Agent, Goods, Message, Notification } from '../types'
+import type { Agent, Goods, Message, Notification, Supplier, SupplierProduct } from '../types'
 
 export const mockAgents: Agent[] = [
   {
@@ -282,4 +282,106 @@ export const mockNotifications: Notification[] = [
   { id: 'notif-4', type: 'agent', titleAr: 'تحديث حالة وكيل', titleFr: 'Mise à jour statut agent', messageAr: 'الوكيل يوسف بلقاسم في حالة تأخر', messageFr: "L'agent Youcef Belgassem est en retard", read: true, timestamp: daysAgo(2), relatedId: 'agent-3' },
   { id: 'notif-5', type: 'goods', titleAr: 'تم التسليم', titleFr: 'Livraison effectuée', messageAr: 'تم تسليم الشحنة CB-2025-004 بنجاح', messageFr: 'La marchandise CB-2025-004 a été livrée avec succès', read: true, timestamp: daysAgo(3), relatedId: 'goods-4' },
   { id: 'notif-6', type: 'system', titleAr: 'مرحباً بكم في CargoBridge', titleFr: 'Bienvenue dans CargoBridge', messageAr: 'تم إعداد النظام بنجاح.', messageFr: 'Le système a été configuré avec succès.', read: true, timestamp: daysAgo(10) },
+]
+
+// ─── Suppliers ───────────────────────────────────────────────────────────────
+
+export const mockSuppliers: Supplier[] = [
+  {
+    id: 'supplier-1',
+    code: 'SUP-2025-0001',
+    name: 'شركة الأفق للأحذية',
+    nameFr: 'Al-Aqaf Shoes Co.',
+    country: 'الصين',
+    city: 'غوانزو',
+    address: 'شارع الصناعة، حي البوسف، غوانزو',
+    phones: [
+      { label: 'رئيسي', number: '+86-20-8888-1234' },
+      { label: 'مبيعات', number: '+86-20-8888-5678' },
+    ],
+    email: 'info@alaqaf-shoes.com',
+    whatsapp: '+86-138-0000-1111',
+    wechat: 'alaqaf_shoes',
+    website: 'www.alaqaf-shoes.com',
+    primaryContact: 'تشانغ واي',
+    secondaryContact: 'لي ming',
+    categories: ['shoes'],
+    paymentPreferences: 'T/T 30% deposit, 70% before shipment',
+    preferredCurrency: 'CNY',
+    leadTimeDays: 21,
+    minimumOrderQty: 500,
+    businessNotes: 'مورد موثوق منذ 2018، جودة ممتازة',
+    status: 'active',
+    createdAt: daysAgo(365),
+    updatedAt: daysAgo(30),
+  },
+  {
+    id: 'supplier-2',
+    code: 'SUP-2025-0002',
+    name: 'مصنع النور للملابس',
+    nameFr: 'Al-Nour Textile Factory',
+    country: 'الصين',
+    city: 'شنتشن',
+    address: 'منطقة لونغ غوا، شنتشن',
+    phones: [
+      { label: 'المصنع', number: '+86-755-2222-3333' },
+    ],
+    email: 'sales@alnour-textile.cn',
+    whatsapp: '+86-139-0000-2222',
+    primaryContact: ' وانغ جيان',
+    secondaryContact: 'تشن يو',
+    categories: ['clothing'],
+    paymentPreferences: 'L/C at sight',
+    preferredCurrency: 'USD',
+    leadTimeDays: 30,
+    minimumOrderQty: 1000,
+    businessNotes: 'متخصص في الملابس الشتوية النسائية',
+    status: 'active',
+    createdAt: daysAgo(200),
+    updatedAt: daysAgo(45),
+  },
+  {
+    id: 'supplier-3',
+    code: 'SUP-2025-0003',
+    name: 'تك لاين إلكترونيكس',
+    nameFr: 'Tech Line Electronics',
+    country: 'الصين',
+    city: 'شنتشن',
+    address: 'حي فويان، شنتشن',
+    phones: [
+      { label: 'مكتب', number: '+86-755-3333-4444' },
+      { label: 'Mobile', number: '+86-186-0000-3333' },
+    ],
+    email: 'export@techline-electronics.com',
+    whatsapp: '+86-186-0000-3333',
+    wechat: 'techline_dz',
+    website: 'www.techline-elec.com',
+    primaryContact: 'ليو تشانغ',
+    secondaryContact: 'فنغ يي',
+    categories: ['electronics', 'accessories'],
+    paymentPreferences: 'T/T 50% deposit, 50% before shipment',
+    preferredCurrency: 'USD',
+    leadTimeDays: 14,
+    minimumOrderQty: 100,
+    businessNotes: 'مورد هواتف و أجهزة لوحية - جودة عالية',
+    status: 'active',
+    createdAt: daysAgo(150),
+    updatedAt: daysAgo(10),
+  },
+]
+
+export const mockSupplierProducts: SupplierProduct[] = [
+  // Products for Supplier 1 - Shoes
+  { id: 'sp-1', supplierId: 'supplier-1', name: 'حذاء رياضي رجالى', category: 'shoes', sku: 'SPR-001', unitCost: 45, currency: 'CNY', createdAt: daysAgo(100), updatedAt: daysAgo(30) },
+  { id: 'sp-2', supplierId: 'supplier-1', name: 'حذاء نسائي كعب عالي', category: 'shoes', sku: 'SNW-001', unitCost: 38, currency: 'CNY', createdAt: daysAgo(100), updatedAt: daysAgo(30) },
+  { id: 'sp-3', supplierId: 'supplier-1', name: 'حذاء أطفال', category: 'shoes', sku: 'SKD-001', unitCost: 25, currency: 'CNY', createdAt: daysAgo(100), updatedAt: daysAgo(30) },
+  // Products for Supplier 2 - Clothing
+  { id: 'sp-4', supplierId: 'supplier-2', name: 'معطف شتوي نسائي', category: 'clothing', sku: 'CFW-001', unitCost: 85, currency: 'USD', createdAt: daysAgo(80), updatedAt: daysAgo(20) },
+  { id: 'sp-5', supplierId: 'supplier-2', name: 'بنطلون صوف نسائي', category: 'clothing', sku: 'CPW-002', unitCost: 35, currency: 'USD', createdAt: daysAgo(80), updatedAt: daysAgo(20) },
+  { id: 'sp-6', supplierId: 'supplier-2', name: 'فستان سهرة', category: 'clothing', sku: 'CEV-003', unitCost: 55, currency: 'USD', createdAt: daysAgo(80), updatedAt: daysAgo(20) },
+  // Products for Supplier 3 - Electronics
+  { id: 'sp-7', supplierId: 'supplier-3', name: 'هاتف ذكي 6.5"', category: 'electronics', sku: 'EPH-001', unitCost: 120, currency: 'USD', createdAt: daysAgo(60), updatedAt: daysAgo(5) },
+  { id: 'sp-8', supplierId: 'supplier-3', name: 'جهاز لوحي 10"', category: 'electronics', sku: 'ETB-002', unitCost: 95, currency: 'USD', createdAt: daysAgo(60), updatedAt: daysAgo(5) },
+  { id: 'sp-9', supplierId: 'supplier-3', name: 'سماعات بلوتوث', category: 'accessories', sku: 'EBS-003', unitCost: 15, currency: 'USD', createdAt: daysAgo(60), updatedAt: daysAgo(5) },
+  { id: 'sp-10', supplierId: 'supplier-3', name: 'كابل USB-C', category: 'accessories', sku: 'EUC-004', unitCost: 3, currency: 'USD', createdAt: daysAgo(60), updatedAt: daysAgo(5) },
 ]

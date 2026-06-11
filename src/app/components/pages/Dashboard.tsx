@@ -2,12 +2,13 @@ import { useMemo } from 'react'
 import { useNavigate } from 'react-router'
 import {
   Package, Users, Clock, AlertTriangle, CheckCircle2,
-  TrendingUp, ArrowUpRight,
+  TrendingUp, ArrowUpRight, Star, DollarSign,
 } from 'lucide-react'
 import { useAppStore } from '../../../store/appStore'
 import { StatusBadge } from '../ui/StatusBadge'
 import { formatDistanceToNow } from '../../../utils/dateUtils'
 import { cn } from '../../utils/cn'
+import { getDashboardStats } from '../../../services/analyticsService'
 
 const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
 const MONTHS_FR = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
@@ -248,6 +249,8 @@ export function Dashboard() {
     ? Math.round((stats.delivered / goods.length) * 100)
     : 0
 
+  const supplierStats = useMemo(() => getDashboardStats(), [goods, agents])
+
   return (
     <div className="p-4 lg:p-6 space-y-6">
       {/* Page title */}
@@ -334,6 +337,60 @@ export function Dashboard() {
                 </div>
               )
             })}
+          </div>
+        </div>
+
+        {/* Supplier Stats Section */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div onClick={() => navigate('/suppliers/analytics')} className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{supplierStats.totalOutstanding.toLocaleString()}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('suppliers.outstandingBalance')}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center">
+                <Clock className="w-5 h-5 text-amber-500" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{supplierStats.delayedPOs}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('suppliers.delayedPOs')}</p>
+              </div>
+            </div>
+          </div>
+          <div onClick={() => navigate('/suppliers/tasks')} className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-shadow">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-orange-500" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{supplierStats.overdueTasks}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('suppliers.overdueTasks')}</p>
+              </div>
+            </div>
+          </div>
+          <div onClick={() => navigate('/suppliers/analytics')} className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-semibold text-gray-900 dark:text-white text-sm">{t('suppliers.topSuppliersThisMonth')}</h4>
+              <ArrowUpRight className="w-4 h-4 text-gray-400" />
+            </div>
+            <div className="space-y-1">
+              {supplierStats.topSuppliersThisMonth.slice(0, 3).map((s, i) => (
+                <div key={s.supplierId} className="flex items-center justify-between text-xs">
+                  <span className="text-gray-700 dark:text-gray-300 truncate max-w-[100px]">{s.supplierName}</span>
+                  <span className="text-gray-500 font-mono">{s.spend.toLocaleString()}</span>
+                </div>
+              ))}
+              {supplierStats.topSuppliersThisMonth.length === 0 && (
+                <p className="text-xs text-gray-400">{t('common.noData')}</p>
+              )}
+            </div>
           </div>
         </div>
       </div>
