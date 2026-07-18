@@ -17,11 +17,13 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig(({ mode }) => {
-  // Netlify sets NETLIFY=true — refuse a production ship that still points at localhost.
+  // Netlify sets NETLIFY=true. Prefer VITE_API_URL in Site settings; do not fail the build
+  // so the static site can still deploy before the API host is ready.
   if (process.env.NETLIFY === 'true' && !process.env.VITE_API_URL) {
-    throw new Error(
-      'VITE_API_URL is required on Netlify. Set it in Site settings → Environment variables ' +
-        '(e.g. https://your-api.example.com/api).',
+    console.warn(
+      '[CargoBridge] VITE_API_URL is not set on Netlify. ' +
+        'Build continues with the local fallback (127.0.0.1) — login will not work until you set ' +
+        'VITE_API_URL=https://your-api.example.com/api in Site settings → Environment variables.',
     )
   }
 

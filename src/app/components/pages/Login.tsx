@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { useAuthStore } from '../../../store/authStore'
 import { useAppStore } from '../../../store/appStore'
 import { sanitizeNextPath } from '../../../lib/authRedirect'
+import { isApiBaseUnreachableFromBrowser } from '../../../lib/apiBase'
 import { cn } from '../../utils/cn'
 
 export function Login() {
@@ -33,6 +34,8 @@ export function Login() {
         badCreds: 'اسم المستخدم أو كلمة المرور غير صحيحة',
         network: 'تعذّر الاتصال بالخادم. حاول مرة أخرى.',
         adminNote: 'الحساب يُنشأ بواسطة المسؤول — لا يوجد تسجيل ذاتي.',
+        apiMisconfigured:
+          'لم يُضبط عنوان الـ API (VITE_API_URL). عيّنه في إعدادات Netlify ثم أعد النشر — تسجيل الدخول لن يعمل بدون ذلك.',
         show: 'إظهار',
         hide: 'إخفاء',
       }
@@ -46,6 +49,8 @@ export function Login() {
         badCreds: "Nom d'utilisateur ou mot de passe incorrect",
         network: 'Impossible de joindre le serveur. Réessayez.',
         adminNote: "Compte créé par l'administrateur — pas d'inscription publique.",
+        apiMisconfigured:
+          "VITE_API_URL n'est pas configuré. Définissez-le dans Netlify (Environment variables) puis redéployez — la connexion ne fonctionnera pas sinon.",
         show: 'Afficher',
         hide: 'Masquer',
       }
@@ -110,6 +115,15 @@ export function Login() {
           </h1>
           <p className="mt-3 text-sm text-slate-400 sm:text-base">{copy.tagline}</p>
         </div>
+
+        {isApiBaseUnreachableFromBrowser() && (
+          <div
+            role="alert"
+            className="mb-4 rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-3 text-sm text-amber-100"
+          >
+            {copy.apiMisconfigured}
+          </div>
+        )}
 
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-md sm:p-8">
           <div className="mb-6 flex items-center justify-between gap-3">

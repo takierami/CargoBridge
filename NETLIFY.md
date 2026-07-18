@@ -24,15 +24,15 @@ API base path must be reachable as `https://<api-host>/api/` (same as local).
 - **Publish directory:** `dist`
 - **Node:** 20 (set in `netlify.toml`)
 
-### Environment variable (required)
+### Environment variable (strongly recommended)
 
 | Name | Example |
 |------|---------|
 | `VITE_API_URL` | `https://api.example.com/api` |
 
-Must include the `/api` suffix. Builds on Netlify **fail** if this is missing (avoids shipping localhost).
+Must include the `/api` suffix. Set it under **Site configuration → Environment variables** for Production (and Preview if needed).
 
-Set it under **Site configuration → Environment variables** for Production (and Preview if you want preview deploys to hit a staging API).
+If unset, the Netlify **build still succeeds**, but the app falls back to `127.0.0.1` and shows a warning on the login page — login will not work until you set a real HTTPS API URL and redeploy.
 
 ### SPA routing
 

@@ -5,8 +5,9 @@
 [build.environment]
   NODE_VERSION = "20"
   PNPM_VERSION = "10.29.2"
-  # Set VITE_API_URL in the Netlify UI (Site settings → Environment variables).
+  # Prefer setting VITE_API_URL in the Netlify UI (Site settings → Environment variables).
   # Example: VITE_API_URL=https://api.example.com/api
+  # Build succeeds without it, but login will not work until it is set.
   # Do not put Django secrets here — only VITE_* is baked into the frontend bundle.
 
 [[redirects]]
