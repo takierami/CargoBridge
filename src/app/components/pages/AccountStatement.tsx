@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { ArrowLeft, Download, FileText } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
 import { cn } from '../../utils/cn'
 import { buildLedger } from '../../../services/paymentService'
@@ -9,23 +10,47 @@ import type { LedgerEntry, LedgerEntryType } from '../../../types'
 const LEDGER_TYPES: LedgerEntryType[] = ['order', 'payment', 'credit_adjustment', 'debit_adjustment']
 
 export function AccountStatement() {
-  const { t, language, suppliers } = useAppStore()
+  const { t, suppliers, loadSuppliers } = useAppStore()
   const { id } = useParams()
   const navigate = useNavigate()
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
+  const [rawLedger, setRawLedger] = useState<LedgerEntry[]>([])
+  const [loading, setLoading] = useState(true)
 
   const supplier = useMemo(() => suppliers.find(s => s.id === id), [suppliers, id])
 
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    setLoading(true)
+    ;(async () => {
+      try {
+        await loadSuppliers()
+        const entries = await buildLedger(id)
+        if (!cancelled) setRawLedger(entries)
+      } catch {
+        if (!cancelled) {
+          setRawLedger([])
+          toast.error(t('common.error'))
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [id, loadSuppliers, t])
+
   const ledger = useMemo(() => {
-    if (!id) return []
-    let entries = buildLedger(id)
+    let entries = rawLedger
     if (dateFrom) entries = entries.filter(e => e.date >= dateFrom)
     if (dateTo) entries = entries.filter(e => e.date <= dateTo)
     if (typeFilter !== 'all') entries = entries.filter(e => e.type === typeFilter)
     return entries
-  }, [id, dateFrom, dateTo, typeFilter])
+  }, [rawLedger, dateFrom, dateTo, typeFilter])
 
   const formatCurrency = (amount: number, currency: string) => {
     const symbols: Record<string, string> = { USD: '$', CNY: '¥', EUR: '€', DZD: 'دج' }
@@ -59,7 +84,7 @@ export function AccountStatement() {
         <button onClick={() => navigate('/suppliers')} className="flex items-center gap-2 text-blue-500 hover:text-blue-600 mb-4">
           <ArrowLeft className="w-4 h-4" /> {t('common.back')}
         </button>
-        <div className="text-center py-16 text-gray-500">{t('common.noData')}</div>
+        <div className="text-center py-16 text-gray-500">{loading ? t('common.loading') : t('common.noData')}</div>
       </div>
     )
   }
@@ -83,9 +108,15 @@ export function AccountStatement() {
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 space-y-4">
-        <div className="flex flex-wrap gap-3">
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" placeholder={t('suppliers.statementFrom')} />
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" placeholder={t('suppliers.statementTo')} />
+        <div className="flex flex-wrap gap-3 items-end">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">{t('suppliers.statementFrom')}</label>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">{t('suppliers.statementTo')}</label>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+          </div>
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:ring-2 focus:ring-blue-500">
             <option value="all">{t('suppliers.allTypes')}</option>
             {LEDGER_TYPES.map(tp => <option key={tp} value={tp}>{t('suppliers.ledgerTypes.' + tp)}</option>)}
@@ -113,12 +144,18 @@ export function AccountStatement() {
             </p>
           </div>
         </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400">{t('suppliers.balanceHelper')}</p>
       </div>
 
-      {ledger.length === 0 ? (
+      {loading ? (
+        <div className="text-center py-16 text-gray-500 dark:text-gray-400">
+          <p>{t('common.loading')}</p>
+        </div>
+      ) : ledger.length === 0 ? (
         <div className="text-center py-16 text-gray-500 dark:text-gray-400">
           <FileText className="w-12 h-12 mx-auto mb-3 opacity-40" />
           <p>{t('suppliers.noStatementEntries')}</p>
+          <p className="text-xs mt-2 max-w-sm mx-auto opacity-80">{t('suppliers.statementEmptyHint')}</p>
         </div>
       ) : (
         <div className="overflow-x-auto">

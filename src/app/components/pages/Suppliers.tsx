@@ -6,6 +6,8 @@ import { useAppStore } from '../../../store/appStore'
 import { cn } from '../../utils/cn'
 import { formatDate } from '../../../utils/dateUtils'
 import type { Supplier, SupplierStatus, SupplierCategory, SupplierPhone, SupplierDocumentTemplate } from '../../../types'
+import { isOrgAdmin } from '../../../lib/roles'
+import { DEFAULT_TRANSACTION_CURRENCY, currenciesForSelect, currencySymbol } from '../../../lib/currencies'
 
 const ALL_STATUSES: SupplierStatus[] = ['active', 'inactive', 'suspended', 'blacklisted']
 const ALL_CATEGORIES: SupplierCategory[] = ['shoes', 'clothing', 'electronics', 'furniture', 'accessories', 'other']
@@ -32,14 +34,30 @@ interface SupplierFormData {
   status: SupplierStatus
 }
 
-function SupplierForm({ initial, onSave, onCancel, t, categories }: Readonly<{
-  initial?: Partial<Supplier>
-  onSave: (data: SupplierFormData) => void
-  onCancel: () => void
-  t: ReturnType<typeof useAppStore>['t']
-  categories: { value: SupplierCategory; label: string }[]
-}>) {
-  const [form, setForm] = useState<SupplierFormData>({
+const EMPTY_SUPPLIER_FORM: SupplierFormData = {
+  name: '',
+  nameFr: '',
+  country: 'الصين',
+  city: '',
+  address: '',
+  phones: [{ label: 'رئيسي', number: '' }],
+  email: '',
+  whatsapp: '',
+  wechat: '',
+  website: '',
+  primaryContact: '',
+  secondaryContact: '',
+  categories: [],
+  paymentPreferences: '',
+  preferredCurrency: DEFAULT_TRANSACTION_CURRENCY,
+  leadTimeDays: 21,
+  minimumOrderQty: 100,
+  businessNotes: '',
+  status: 'active',
+}
+
+function supplierFormFromInitial(initial?: Partial<Supplier>): SupplierFormData {
+  return {
     name: initial?.name || '',
     nameFr: initial?.nameFr || '',
     country: initial?.country || 'الصين',
@@ -54,12 +72,23 @@ function SupplierForm({ initial, onSave, onCancel, t, categories }: Readonly<{
     secondaryContact: initial?.secondaryContact || '',
     categories: initial?.categories || [],
     paymentPreferences: initial?.paymentPreferences || '',
-    preferredCurrency: initial?.preferredCurrency || 'USD',
+    preferredCurrency: initial?.preferredCurrency || DEFAULT_TRANSACTION_CURRENCY,
     leadTimeDays: initial?.leadTimeDays || 21,
     minimumOrderQty: initial?.minimumOrderQty || 100,
     businessNotes: initial?.businessNotes || '',
     status: initial?.status || 'active',
-  })
+  }
+}
+
+function SupplierForm({ initial, onSave, onSaveAndAddAnother, onCancel, t, categories }: Readonly<{
+  initial?: Partial<Supplier>
+  onSave: (data: SupplierFormData) => void | Promise<void>
+  onSaveAndAddAnother?: (data: SupplierFormData) => void | Promise<void>
+  onCancel: () => void
+  t: ReturnType<typeof useAppStore>['t']
+  categories: { value: SupplierCategory; label: string }[]
+}>) {
+  const [form, setForm] = useState<SupplierFormData>(() => supplierFormFromInitial(initial))
 
   const set = (k: keyof SupplierFormData, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
@@ -79,8 +108,24 @@ function SupplierForm({ initial, onSave, onCancel, t, categories }: Readonly<{
   }
 
   const handleSave = () => {
-    if (!form.name.trim()) return
+    if (!form.name.trim()) {
+      toast.error(t('suppliers.supplierName') + ' *')
+      return
+    }
     onSave(form)
+  }
+
+  const handleSaveAndAddAnother = async () => {
+    if (!form.name.trim() || !onSaveAndAddAnother) {
+      if (!form.name.trim()) toast.error(t('suppliers.supplierName') + ' *')
+      return
+    }
+    try {
+      await onSaveAndAddAnother(form)
+      setForm({ ...EMPTY_SUPPLIER_FORM, phones: [{ label: 'رئيسي', number: '' }] })
+    } catch {
+      // Parent toasts the error; keep form data for correction
+    }
   }
 
   return (
@@ -220,10 +265,9 @@ function SupplierForm({ initial, onSave, onCancel, t, categories }: Readonly<{
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.preferredCurrency')}</label>
               <select value={form.preferredCurrency} onChange={e => set('preferredCurrency', e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
-                <option value="USD">USD</option>
-                <option value="CNY">CNY</option>
-                <option value="EUR">EUR</option>
-                <option value="DZD">DZD</option>
+                {currenciesForSelect(form.preferredCurrency).map(c => (
+                  <option key={c.code} value={c.code}>{c.code}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -248,13 +292,19 @@ function SupplierForm({ initial, onSave, onCancel, t, categories }: Readonly<{
             </select>
           </div>
         </div>
-        <div className="flex gap-3 p-5 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex flex-wrap gap-3 p-5 border-t border-gray-200 dark:border-gray-700">
           <button onClick={handleSave}
-            className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+            className="flex-1 min-w-[120px] py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
             {t('common.save')}
           </button>
+          {!initial?.id && onSaveAndAddAnother && (
+            <button onClick={handleSaveAndAddAnother}
+              className="flex-1 min-w-[120px] py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-lg text-sm font-medium transition-colors">
+              {t('suppliers.saveAndAddAnother')}
+            </button>
+          )}
           <button onClick={onCancel}
-            className="flex-1 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors">
+            className="flex-1 min-w-[120px] py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors">
             {t('common.cancel')}
           </button>
         </div>
@@ -306,8 +356,8 @@ function mergeSupplierTemplate(body: string, supplier: Supplier, language: 'ar' 
   const locale = language === 'ar' ? 'ar-DZ' : 'fr-FR'
   const phone = supplier.phones[0]?.number || '—'
   
-  const currency = supplier.preferredCurrency || 'DZD'
-  const symbol = { USD: '$', CNY: '¥', EUR: '€', DZD: 'دج' }[currency] ?? currency
+  const currency = supplier.preferredCurrency || DEFAULT_TRANSACTION_CURRENCY
+  const symbol = currencySymbol(currency)
   const mockAmount = 150000
   const formattedMockAmount = `${symbol} ${mockAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -631,7 +681,7 @@ function SupplierTemplatePreviewModal({
 }
 
 export function Suppliers() {
-  const { t, language, suppliers, supplierTemplates, addSupplier, updateSupplier, deleteSupplier, getSupplierRating, addSupplierTemplate, updateSupplierTemplate, deleteSupplierTemplate } = useAppStore()
+  const { t, language, role, suppliers, supplierTemplates, addSupplier, updateSupplier, deleteSupplier, getSupplierRating, addSupplierTemplate, updateSupplierTemplate, deleteSupplierTemplate } = useAppStore()
   const navigate = useNavigate()
   const [activeView, setActiveView] = useState<'suppliers' | 'templates'>('suppliers')
   const [search, setSearch] = useState('')
@@ -657,25 +707,44 @@ export function Suppliers() {
     }),
   [suppliers, search, statusFilter])
 
-  const handleSave = (data: SupplierFormData) => {
-    if (editItem) {
-      updateSupplier(editItem.id, data)
-    } else {
-      addSupplier(data)
+  const handleSave = async (data: SupplierFormData, options?: { addAnother?: boolean }) => {
+    if (!isOrgAdmin(role)) {
+      toast.error(t('common.error'))
+      return
+    }
+    let savedId = editItem?.id
+    try {
+      if (editItem) {
+        await updateSupplier(editItem.id, data)
+      } else {
+        const created = await addSupplier(data)
+        savedId = created.id
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('common.error'))
+      throw err
     }
     toast.success(t('common.success'))
+    if (options?.addAnother) {
+      setEditItem(null)
+      return
+    }
     setShowForm(false)
     setEditItem(null)
+    // Open the supplier dashboard after create/update
+    if (savedId) navigate(`/suppliers/${savedId}`)
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    if (!isOrgAdmin(role)) return
     if (confirm(t('suppliers.confirmDelete'))) {
-      deleteSupplier(id)
+      await deleteSupplier(id)
       toast.success(t('common.success'))
     }
   }
 
   const handleSaveTemplate = (data: Omit<SupplierDocumentTemplate, 'id' | 'createdAt'>) => {
+    if (!isOrgAdmin(role)) return
     if (templateEditor && templateEditor !== 'new') {
       updateSupplierTemplate(templateEditor.id, data)
     } else {
@@ -686,6 +755,7 @@ export function Suppliers() {
   }
 
   const handleDeleteTemplate = (id: string) => {
+    if (!isOrgAdmin(role)) return
     if (confirm(t('suppliers.confirmDelete'))) {
       deleteSupplierTemplate(id)
       toast.success(t('common.success'))
@@ -712,13 +782,15 @@ export function Suppliers() {
             {activeView === 'suppliers' ? `${filtered.length} ${t('common.records')}` : `${templateCount} ${t('common.records')}`}
           </p>
         </div>
-        <button
-          onClick={() => activeView === 'suppliers' ? (setEditItem(null), setShowForm(true)) : setTemplateEditor('new')}
-          className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4" />
-          {activeView === 'suppliers' ? t('suppliers.addSupplier') : t('suppliers.addTemplate')}
-        </button>
+        {isOrgAdmin(role) && (
+          <button
+            onClick={() => activeView === 'suppliers' ? (setEditItem(null), setShowForm(true)) : setTemplateEditor('new')}
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4" />
+            {activeView === 'suppliers' ? t('suppliers.addSupplier') : t('suppliers.addTemplate')}
+          </button>
+        )}
       </div>
 
       <div className="flex gap-2 rounded-xl border border-gray-200 bg-white p-1 dark:border-gray-700 dark:bg-gray-800 w-fit">
@@ -769,7 +841,14 @@ export function Suppliers() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {filtered.map((supplier) => (
-                <div key={supplier.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md transition-shadow">
+                <div
+                  key={supplier.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/suppliers/${supplier.id}`)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/suppliers/${supplier.id}`) } }}
+                  className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md transition-shadow cursor-pointer text-start"
+                >
                   <div className="flex items-start justify-between mb-3">
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white font-bold text-xl">
                       {supplier.name.charAt(0)}
@@ -841,16 +920,20 @@ export function Suppliers() {
                     </div>
                   </div>
 
-                  <div className="flex gap-1 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                  <div className="flex gap-1 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
                     <button onClick={() => navigate(`/suppliers/${supplier.id}`)} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
                       <Eye className="w-3 h-3" />{t('common.view')}
                     </button>
-                    <button onClick={() => { setEditItem(supplier); setShowForm(true) }} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors">
-                      <Pencil className="w-3 h-3" />{t('common.edit')}
-                    </button>
-                    <button onClick={() => handleDelete(supplier.id)} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                      <Trash2 className="w-3 h-3" />{t('common.delete')}
-                    </button>
+                    {isOrgAdmin(role) && (
+                      <>
+                        <button onClick={() => { setEditItem(supplier); setShowForm(true) }} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors">
+                          <Pencil className="w-3 h-3" />{t('common.edit')}
+                        </button>
+                        <button onClick={() => handleDelete(supplier.id)} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                          <Trash2 className="w-3 h-3" />{t('common.delete')}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
@@ -860,7 +943,8 @@ export function Suppliers() {
           {showForm && (
             <SupplierForm
               initial={editItem || undefined}
-              onSave={handleSave}
+              onSave={(data) => handleSave(data)}
+              onSaveAndAddAnother={(data) => handleSave(data, { addAnother: true })}
               onCancel={() => { setShowForm(false); setEditItem(null) }}
               t={t}
               categories={categoryOptions}
@@ -888,12 +972,16 @@ export function Suppliers() {
                   {template.templateBody}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button onClick={() => setTemplateEditor(template)} className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-300">
-                    <Pencil className="h-3.5 w-3.5" /> {t('common.edit')}
-                  </button>
-                  <button onClick={() => handleDeleteTemplate(template.id)} className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300">
-                    <Trash2 className="h-3.5 w-3.5" /> {t('common.delete')}
-                  </button>
+                  {isOrgAdmin(role) && (
+                    <>
+                      <button onClick={() => setTemplateEditor(template)} className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-300">
+                        <Pencil className="h-3.5 w-3.5" /> {t('common.edit')}
+                      </button>
+                      <button onClick={() => handleDeleteTemplate(template.id)} className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300">
+                        <Trash2 className="h-3.5 w-3.5" /> {t('common.delete')}
+                      </button>
+                    </>
+                  )}
                   <button onClick={() => setPreviewTemplate(template)} className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 transition-colors hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-300">
                     <Printer className="h-3.5 w-3.5" /> {t('suppliers.printExport')}
                   </button>

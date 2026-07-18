@@ -5,8 +5,15 @@ import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
 import { cn } from '../../utils/cn'
 import type { PurchaseOrder, POStatus, Supplier, PurchaseOrderItem, SupplierProduct } from '../../../types'
+import { isOrgAdmin } from '../../../lib/roles'
 import { ReceiptPrintModal } from '../ReceiptPrintModal'
 import type { POReceiptData } from '../ReceiptPrintModal'
+import {
+  DEFAULT_TRANSACTION_CURRENCY,
+  currenciesForSelect,
+  currencyOptionLabel,
+  currencySymbol,
+} from '../../../lib/currencies'
 
 const PO_STATUSES: POStatus[] = ['draft', 'sent', 'confirmed', 'in_production', 'ready', 'shipped', 'received', 'cancelled']
 
@@ -29,6 +36,10 @@ interface POFormData {
   items: POFormItem[]
 }
 
+function emptyLineItem(): POFormItem {
+  return { productName: '', quantity: 1, unitCost: 0, isCustom: true, selectedProduct: '' }
+}
+
 function PurchaseOrderForm({
   initial,
   onSave,
@@ -39,7 +50,7 @@ function PurchaseOrderForm({
   supplierProducts,
 }: {
   initial?: (Partial<PurchaseOrder> & { items?: Omit<PurchaseOrderItem, 'purchaseOrderId' | 'createdAt' | 'updatedAt'>[] }) | null
-  onSave: (data: POFormData) => void
+  onSave: (data: POFormData, options?: { addAnother?: boolean }) => void | Promise<void>
   onCancel: () => void
   t: ReturnType<typeof useAppStore>['t']
   language: 'ar' | 'fr'
@@ -49,9 +60,14 @@ function PurchaseOrderForm({
   const [supplierId, setSupplierId] = useState(initial?.supplierId || '')
   const [orderDate, setOrderDate] = useState(initial?.orderDate || new Date().toISOString().split('T')[0])
   const [expectedCompletionDate, setExpectedCompletionDate] = useState(initial?.expectedCompletionDate || '')
-  const [currency, setCurrency] = useState(initial?.currency || 'USD')
+  const [currency, setCurrency] = useState(
+    initial?.currency
+      || suppliers.find(s => s.id === (initial?.supplierId || ''))?.preferredCurrency
+      || DEFAULT_TRANSACTION_CURRENCY
+  )
   const [status, setStatus] = useState<POStatus>(initial?.status || 'draft')
   const [notes, setNotes] = useState(initial?.notes || '')
+  const [saving, setSaving] = useState(false)
 
   const availableProducts = useMemo(() => {
     return supplierProducts.filter(p => p.supplierId === supplierId)
@@ -68,18 +84,22 @@ function PurchaseOrderForm({
         selectedProduct: '',
       }))
     }
-    return [{ productName: '', quantity: 1, unitCost: 0, isCustom: true, selectedProduct: '' }]
+    return [emptyLineItem()]
   })
 
-  // If supplierId changes, clear product selections unless it's editing the initial supplier
+  // If supplierId changes, clear product selections and adopt preferred currency
   useEffect(() => {
     if (supplierId && supplierId !== initial?.supplierId) {
-      setItems([{ productName: '', quantity: 1, unitCost: 0, isCustom: true, selectedProduct: '' }])
+      setItems([emptyLineItem()])
+      const supplier = suppliers.find(s => s.id === supplierId)
+      if (supplier?.preferredCurrency) {
+        setCurrency(supplier.preferredCurrency)
+      }
     }
-  }, [supplierId, initial?.supplierId])
+  }, [supplierId, initial?.supplierId, suppliers])
 
   const addItem = () => {
-    setItems(prev => [...prev, { productName: '', quantity: 1, unitCost: 0, isCustom: true, selectedProduct: '' }])
+    setItems(prev => [...prev, emptyLineItem()])
   }
 
   const removeItem = (index: number) => {
@@ -93,31 +113,74 @@ function PurchaseOrderForm({
     }))
   }
 
+  const selectProduct = (index: number, productId: string) => {
+    if (!productId) {
+      updateItem(index, 'selectedProduct', '')
+      return
+    }
+    const product = availableProducts.find(p => p.id === productId)
+    if (!product) return
+    setItems(prev => prev.map((item, i) => {
+      if (i !== index) return item
+      return {
+        ...item,
+        selectedProduct: productId,
+        productName: product.name,
+        unitCost: product.unitCost,
+        isCustom: false,
+      }
+    }))
+    setCurrency(product.currency || currency)
+  }
+
   const totalAmount = useMemo(() => {
     return items.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0)
   }, [items])
 
-  const handleSave = () => {
-    if (!supplierId || items.length === 0) return
-    const isValid = items.every(item => item.productName.trim() && item.quantity >= 1 && item.unitCost >= 0)
-    if (!isValid) {
-      toast.error(language === 'ar' ? 'يرجى ملء جميع بنود الطلب بشكل صحيح' : 'Veuillez remplir correctement tous les éléments de la commande')
+  const resetForAnother = () => {
+    setOrderDate(new Date().toISOString().split('T')[0])
+    setExpectedCompletionDate('')
+    // Keep profile-create default (confirmed); free create stays draft
+    setStatus((!initial?.id && initial?.status) ? initial.status : 'draft')
+    setNotes('')
+    setItems([emptyLineItem()])
+    const supplier = suppliers.find(s => s.id === supplierId)
+    if (supplier?.preferredCurrency) setCurrency(supplier.preferredCurrency)
+  }
+
+  const handleSave = async (addAnother = false) => {
+    if (!supplierId) {
+      toast.error(t('suppliers.selectSupplier'))
       return
     }
-    onSave({
-      supplierId,
-      orderDate,
-      expectedCompletionDate,
-      currency,
-      status,
-      notes,
-      items,
-    })
+    if (items.length === 0) return
+    const missingNameOrQty = items.some(item => !item.productName.trim() || item.quantity < 1)
+    const missingCost = items.some(item => !(item.unitCost > 0))
+    if (missingNameOrQty || missingCost) {
+      toast.error(missingCost ? t('suppliers.unitCostRequired') : (
+        language === 'ar' ? 'يرجى ملء جميع بنود الطلب بشكل صحيح' : 'Veuillez remplir correctement tous les éléments de la commande'
+      ))
+      return
+    }
+    setSaving(true)
+    try {
+      await onSave({
+        supplierId,
+        orderDate,
+        expectedCompletionDate,
+        currency,
+        status,
+        notes,
+        items,
+      }, { addAnother })
+      if (addAnother) resetForAnother()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const formatItemCurrency = (amount: number) => {
-    const symbols: Record<string, string> = { USD: '$', CNY: '¥', EUR: '€', DZD: 'دج' }
-    return (symbols[currency] || '$') + ' ' + amount.toFixed(2)
+    return currencySymbol(currency) + ' ' + amount.toFixed(2)
   }
 
   return (
@@ -187,10 +250,11 @@ function PurchaseOrderForm({
                 onChange={e => setCurrency(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
               >
-                <option value="USD">USD</option>
-                <option value="CNY">CNY</option>
-                <option value="EUR">EUR</option>
-                <option value="DZD">DZD</option>
+                {currenciesForSelect(currency).map(c => (
+                  <option key={c.code} value={c.code}>
+                    {currencyOptionLabel(c.code, language)}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -232,9 +296,23 @@ function PurchaseOrderForm({
               <div className="space-y-3 max-h-[35vh] overflow-y-auto pr-1">
                 {items.map((item, idx) => (
                   <div key={idx} className="grid grid-cols-12 gap-3 items-start border-b border-gray-50 dark:border-gray-700/50 pb-3 last:border-0 last:pb-0">
-                    {/* Product Name Input */}
+                    {/* Product picker + name */}
                     <div className="col-span-12 md:col-span-5 space-y-1">
                       <label className="block text-xs font-medium text-gray-500 md:hidden">{t('suppliers.productName')}</label>
+                      {availableProducts.length > 0 && (
+                        <select
+                          value={item.selectedProduct || ''}
+                          onChange={e => selectProduct(idx, e.target.value)}
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">{language === 'ar' ? 'منتج مخصص / اختر من الكتالوج' : 'Personnalisé / catalogue'}</option>
+                          {availableProducts.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.name} ({p.unitCost} {p.currency})
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       <input
                         type="text"
                         placeholder={language === 'ar' ? 'اسم المنتج' : 'Nom du produit'}
@@ -261,10 +339,11 @@ function PurchaseOrderForm({
                       <label className="block text-xs font-medium text-gray-500 md:hidden">{t('suppliers.unitCost')}</label>
                       <input
                         type="number"
-                        min="0"
+                        min="0.01"
                         step="0.01"
-                        value={item.unitCost}
+                        value={item.unitCost || ''}
                         onChange={e => updateItem(idx, 'unitCost', Math.max(0, Number(e.target.value)))}
+                        placeholder="0.00"
                         className="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 font-mono text-end"
                       />
                     </div>
@@ -313,14 +392,23 @@ function PurchaseOrderForm({
             <span className="text-lg font-bold text-gray-900 dark:text-white font-mono">{formatItemCurrency(totalAmount)}</span>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
-              onClick={handleSave}
-              disabled={!supplierId || items.length === 0}
+              onClick={() => handleSave(false)}
+              disabled={!supplierId || items.length === 0 || saving}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
               {t('common.save')}
             </button>
+            {!initial?.id && (
+              <button
+                onClick={() => handleSave(true)}
+                disabled={!supplierId || items.length === 0 || saving}
+                className="px-4 py-2 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {t('suppliers.saveAndAddAnother')}
+              </button>
+            )}
             <button
               onClick={onCancel}
               className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors"
@@ -335,7 +423,7 @@ function PurchaseOrderForm({
 }
 
 export function PurchaseOrders() {
-  const { t, language, purchaseOrders, suppliers, supplierProducts, purchaseOrderItems, addPurchaseOrder, updatePurchaseOrder } = useAppStore()
+  const { t, language, role, purchaseOrders, suppliers, supplierProducts, purchaseOrderItems, addPurchaseOrder, updatePurchaseOrder, updatePurchaseOrderStatus } = useAppStore()
   const navigate = useNavigate()
   const { id } = useParams()
   const [searchParams] = useSearchParams()
@@ -365,7 +453,9 @@ export function PurchaseOrders() {
       setEditItem(currentPO)
       setShowForm(true)
     } else if (id === 'new' || isNew) {
-      setEditItem(supplierIdParam ? { supplierId: supplierIdParam } : null)
+      setEditItem(supplierIdParam
+        ? { supplierId: supplierIdParam, status: 'confirmed' }
+        : null)
       setShowForm(true)
     } else {
       setShowForm(false)
@@ -373,7 +463,11 @@ export function PurchaseOrders() {
     }
   }, [currentPO, id, isNew, supplierIdParam])
 
-  const handleSaveForm = (data: POFormData) => {
+  const handleSaveForm = async (data: POFormData, options?: { addAnother?: boolean }) => {
+    if (!isOrgAdmin(role)) {
+      toast.error(t('common.error'))
+      return
+    }
     const itemsToSave = data.items.map(item => ({
       id: item.id,
       productName: item.productName,
@@ -382,29 +476,64 @@ export function PurchaseOrders() {
     }))
 
     let savedPoNumber = editItem?.poNumber ?? ''
-    if (editItem?.id) {
-      updatePurchaseOrder(editItem.id, {
-        supplierId: data.supplierId,
-        orderDate: data.orderDate,
-        expectedCompletionDate: data.expectedCompletionDate || undefined,
-        currency: data.currency,
-        status: data.status,
-        notes: data.notes || undefined,
-        items: itemsToSave,
-      })
-    } else {
-      const saved = addPurchaseOrder({
-        supplierId: data.supplierId,
-        orderDate: data.orderDate,
-        expectedCompletionDate: data.expectedCompletionDate || undefined,
-        currency: data.currency,
-        status: data.status,
-        notes: data.notes || undefined,
-        items: itemsToSave,
-      })
-      savedPoNumber = saved.poNumber
+    let receiptStatus = data.status
+    try {
+      if (editItem?.id) {
+        if (editItem.status && editItem.status !== data.status) {
+          const statusResult = await updatePurchaseOrderStatus(editItem.id, data.status)
+          if (!statusResult.success) {
+            toast.error(statusResult.error || t('common.error'))
+            return
+          }
+        }
+        const updated = await updatePurchaseOrder(editItem.id, {
+          supplierId: data.supplierId,
+          orderDate: data.orderDate,
+          expectedCompletionDate: data.expectedCompletionDate || undefined,
+          currency: data.currency,
+          notes: data.notes || undefined,
+          items: itemsToSave,
+        })
+        if (updated?.status) receiptStatus = updated.status
+      } else {
+        let saved = await addPurchaseOrder({
+          supplierId: data.supplierId,
+          orderDate: data.orderDate,
+          expectedCompletionDate: data.expectedCompletionDate || undefined,
+          currency: data.currency,
+          status: data.status,
+          notes: data.notes || undefined,
+          items: itemsToSave,
+        })
+        savedPoNumber = saved.poNumber
+        // Belt-and-suspenders: if API still returned draft but form asked confirmed, advance.
+        if (data.status === 'confirmed' && saved.status === 'draft') {
+          const toSent = await updatePurchaseOrderStatus(saved.id, 'sent')
+          if (toSent.success) {
+            const toConfirmed = await updatePurchaseOrderStatus(saved.id, 'confirmed')
+            if (toConfirmed.success) {
+              saved = { ...saved, status: 'confirmed' }
+            }
+          }
+        } else if (data.status === 'sent' && saved.status === 'draft') {
+          const toSent = await updatePurchaseOrderStatus(saved.id, 'sent')
+          if (toSent.success) saved = { ...saved, status: 'sent' }
+        }
+        receiptStatus = saved.status
+      }
+    } catch {
+      toast.error(t('common.error'))
+      return
     }
     toast.success(t('common.success'))
+
+    if (options?.addAnother) {
+      setEditItem(supplierIdParam
+        ? { supplierId: supplierIdParam, status: 'confirmed' }
+        : { supplierId: data.supplierId })
+      return
+    }
+
     setShowForm(false)
 
     // Build receipt data and show print modal
@@ -417,7 +546,7 @@ export function PurchaseOrders() {
       orderDate: data.orderDate,
       expectedCompletionDate: data.expectedCompletionDate || undefined,
       currency: data.currency,
-      status: data.status,
+      status: receiptStatus,
       notes: data.notes || undefined,
       items: data.items.map(item => ({
         productName: item.productName,
@@ -477,15 +606,18 @@ export function PurchaseOrders() {
   }
 
   const formatCurrency = (amount: number, currency: string) => {
-    const symbols: Record<string, string> = { USD: '$', CNY: '¥', EUR: '€', DZD: 'دج' }
-    return symbols[currency] + ' ' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return currencySymbol(currency) + ' ' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm(t('suppliers.confirmDelete'))) {
-      const { deletePurchaseOrder } = useAppStore.getState()
-      deletePurchaseOrder(id)
-      toast.success(t('common.success'))
+      try {
+        const { deletePurchaseOrder } = useAppStore.getState()
+        await deletePurchaseOrder(id)
+        toast.success(t('common.success'))
+      } catch {
+        toast.error(t('common.error'))
+      }
     }
   }
 
@@ -496,9 +628,11 @@ export function PurchaseOrders() {
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('suppliers.purchaseOrders')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} {t('common.records')}</p>
         </div>
-        <button onClick={() => navigate('/suppliers/purchase-orders/new')} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-          <Plus className="w-4 h-4" /> {t('suppliers.addPurchaseOrder')}
-        </button>
+        {isOrgAdmin(role) && (
+          <button onClick={() => navigate('/suppliers/purchase-orders/new')} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+            <Plus className="w-4 h-4" /> {t('suppliers.addPurchaseOrder')}
+          </button>
+        )}
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 space-y-4">
@@ -528,7 +662,7 @@ export function PurchaseOrders() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-500 dark:text-gray-400"><p>{t('suppliers.noSuppliers')}</p></div>
+        <div className="text-center py-16 text-gray-500 dark:text-gray-400"><p>{t('suppliers.noPurchaseOrders')}</p></div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -554,8 +688,12 @@ export function PurchaseOrders() {
                   <td className="px-5 py-4 text-end text-sm font-mono text-gray-900 dark:text-white">{formatCurrency(po.totalAmount, po.currency)}</td>
                   <td className="px-5 py-4 text-end">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => navigate('/suppliers/purchase-orders/' + po.id)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg" title={t('common.edit') || 'Edit'}><Pencil className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => handleDelete(po.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg" title={t('common.delete') || 'Delete'}><Trash2 className="w-3.5 h-3.5" /></button>
+                      {isOrgAdmin(role) && (
+                        <>
+                          <button onClick={() => navigate('/suppliers/purchase-orders/' + po.id)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg" title={t('common.edit') || 'Edit'}><Pencil className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleDelete(po.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg" title={t('common.delete') || 'Delete'}><Trash2 className="w-3.5 h-3.5" /></button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

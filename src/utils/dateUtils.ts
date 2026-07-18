@@ -44,6 +44,24 @@ export function formatTime(dateString: string, language: Language): string {
   })
 }
 
+/** Wrap text in Unicode LTR isolates so digits/latin stay ordered inside RTL. */
+export function ltrIsolate(value: string): string {
+  if (!value || value === '—') return value
+  return `\u2066${value}\u2069`
+}
+
+export function formatDateTime(language: Language, at: Date = new Date()): string {
+  const locale = language === 'ar' ? 'ar-DZ' : 'fr-FR'
+  const date = at.toLocaleDateString(locale)
+  const time = at.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
+  return `${date} — ${time}`
+}
+
+/** DateTime wrapped for safe embedding in Arabic template bodies. */
+export function formatDateTimeIsolated(language: Language, at: Date = new Date()): string {
+  return ltrIsolate(formatDateTime(language, at))
+}
+
 export function isSameDay(d1: string, d2: string): boolean {
   const date1 = new Date(d1)
   const date2 = new Date(d2)

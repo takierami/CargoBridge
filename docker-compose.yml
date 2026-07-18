@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-CargoDZ}
+      POSTGRES_USER: ${DB_USER:-Taki_CargoDZ}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-taki}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - cargobridge_pg:/var/lib/postgresql/data
+
+volumes:
+  cargobridge_pg:

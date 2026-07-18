@@ -1,75 +1,86 @@
 import type { Goods } from '../types'
-import { mockGoods } from '../mock-data'
-
-const KEY = 'cargobridge_goods'
-
-function generateTrackingNumber(): string {
-  const year = new Date().getFullYear()
-  const num = String(Math.floor(Math.random() * 900) + 100)
-  return `CB-${year}-${num}`
-}
+import { api } from '../lib/apiClient'
 
 export const goodsService = {
-  getAll(): Goods[] {
-    const stored = localStorage.getItem(KEY)
-    if (!stored) {
-      localStorage.setItem(KEY, JSON.stringify(mockGoods))
-      return mockGoods
-    }
+  async getAll(): Promise<Goods[]> {
+    return api.getList<Goods>('/goods/')
+  },
+
+  async getById(id: string): Promise<Goods | undefined> {
     try {
-      return JSON.parse(stored) as Goods[]
+      return await api.get<Goods>(`/goods/${id}/`)
     } catch {
-      localStorage.setItem(KEY, JSON.stringify(mockGoods))
-      return mockGoods
+      return undefined
     }
   },
 
-  getById(id: string): Goods | undefined {
-    return this.getAll().find((g) => g.id === id)
+  async getByTrackingNumber(tn: string): Promise<Goods | undefined> {
+    const all = await this.getAll()
+    return all.find((g) => g.trackingNumber.toLowerCase() === tn.toLowerCase())
   },
 
-  getByTrackingNumber(tn: string): Goods | undefined {
-    return this.getAll().find(
-      (g) => g.trackingNumber.toLowerCase() === tn.toLowerCase()
-    )
+  async getByAgentId(agentId: string): Promise<Goods[]> {
+    const all = await this.getAll()
+    return all.filter((g) => g.agentId === agentId)
   },
 
-  getByAgentId(agentId: string): Goods[] {
-    return this.getAll().filter((g) => g.agentId === agentId)
+  async create(data: Omit<Goods, 'id' | 'createdAt' | 'trackingNumber'>): Promise<Goods> {
+    return api.post<Goods>('/goods/', data)
   },
 
-  create(data: Omit<Goods, 'id' | 'createdAt' | 'trackingNumber'>): Goods {
-    const all = this.getAll()
-    const newGoods: Goods = {
-      ...data,
-      id: `goods-${Date.now()}`,
-      trackingNumber: generateTrackingNumber(),
-      createdAt: new Date().toISOString(),
+  async update(id: string, data: Partial<Goods>): Promise<Goods | null> {
+    try {
+      return await api.patch<Goods>(`/goods/${id}/`, data)
+    } catch {
+      return null
     }
-    all.push(newGoods)
-    localStorage.setItem(KEY, JSON.stringify(all))
-    return newGoods
   },
 
-  update(id: string, data: Partial<Goods>): Goods | null {
-    const all = this.getAll()
-    const idx = all.findIndex((g) => g.id === id)
-    if (idx === -1) return null
-    all[idx] = { ...all[idx], ...data }
-    localStorage.setItem(KEY, JSON.stringify(all))
-    return all[idx]
+  async updateStatus(id: string, status: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      return await api.post<{ success: boolean; error?: string }>(
+        `/goods/${id}/update_status/`,
+        { status },
+      )
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : 'Failed' }
+    }
   },
 
-  delete(id: string): boolean {
-    const all = this.getAll()
-    const idx = all.findIndex(g => g.id === id)
-    if (idx === -1) return false
-    const filtered = all.filter((g) => g.id !== id)
-    localStorage.setItem(KEY, JSON.stringify(filtered))
-    return true
+  async getAllowedStatuses(id: string): Promise<{
+    status: string
+    statusConsistent: boolean
+    lastEventStatus: string | null
+    allowedActions: { status: string; actionKey: string }[]
+  }> {
+    return api.get(`/goods/${id}/allowed_statuses/`)
   },
 
-  reset(): void {
-    localStorage.setItem(KEY, JSON.stringify(mockGoods))
+  async updateCustomsStatus(
+    id: string,
+    customsStatus: string,
+    notes = '',
+  ): Promise<{ success: boolean; error?: string; goods?: Goods }> {
+    try {
+      return await api.post<{ success: boolean; error?: string; goods?: Goods }>(
+        `/goods/${id}/update_customs_status/`,
+        { customs_status: customsStatus, notes },
+      )
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : 'Failed' }
+    }
+  },
+
+  async delete(id: string): Promise<boolean> {
+    try {
+      await api.delete(`/goods/${id}/`)
+      return true
+    } catch {
+      return false
+    }
+  },
+
+  async reset(): Promise<void> {
+    await api.post('/reset/')
   },
 }

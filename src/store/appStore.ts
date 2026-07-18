@@ -1,13 +1,19 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { Agent, Goods, Notification, DocumentTemplate, Language, Theme, UserRole, TemplateType, Supplier, SupplierProduct, SupplierCategoryEntity, PurchaseOrder, PurchaseOrderItem, PriceHistoryEntry, POStatus, SupplierPayment, SupplierAdjustment, SupplierAdjustmentInput, SupplierDocument, SupplierCommunication, SupplierTask, SupplierRating, SupplierDocumentTemplate } from '../types'
-// Note: SupplierDocument now uses uploadedAt (not isDeleted/createdAt/updatedAt)
+import type {
+  Agent, Goods, Notification, DocumentTemplate, Language, Theme, UserRole,
+  TemplateType, Supplier, SupplierProduct, SupplierCategoryEntity, PurchaseOrder,
+  PurchaseOrderItem, PriceHistoryEntry, POStatus, SupplierPayment, SupplierAdjustment,
+  SupplierAdjustmentInput, SupplierDocument, SupplierCommunication, SupplierTask,
+  SupplierRating, SupplierDocumentTemplate,
+} from '../types'
+import { fetchBootstrap } from '../lib/apiClient'
 import { goodsService } from '../services/goodsService'
 import { agentService } from '../services/agentService'
 import { notificationService } from '../services/notificationService'
 import { templateService } from '../services/templateService'
 import { supplierTemplateService } from '../services/supplierTemplateService'
-import { currencyService, conversionHistoryService, calcRecordService } from '../services/currencyService'
+import { setCurrencyCache, setConversionCache, setCalcCache } from '../services/currencyService'
 import { supplierService, supplierProductService } from '../services/supplierService'
 import { supplierCategoryService } from '../services/supplierCategoryService'
 import { purchaseOrderService, priceHistoryService } from '../services/purchaseOrderService'
@@ -17,6 +23,7 @@ import { communicationService } from '../services/communicationService'
 import { taskService } from '../services/taskService'
 import { ratingService } from '../services/ratingService'
 import { createT, type TFunction } from '../locales'
+import type { Currency, ConversionRecord, CalculatorRecord } from '../types'
 
 interface AppStore {
   language: Language
@@ -25,13 +32,14 @@ interface AppStore {
   companyName: string
   companyNameFr: string
   sidebarOpen: boolean
+  isDataLoading: boolean
+  dataError: string | null
 
   goods: Goods[]
   agents: Agent[]
   notifications: Notification[]
   templates: DocumentTemplate[]
   supplierTemplates: SupplierDocumentTemplate[]
-
   suppliers: Supplier[]
   supplierProducts: SupplierProduct[]
   supplierCategories: SupplierCategoryEntity[]
@@ -55,94 +63,91 @@ interface AppStore {
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
 
-  loadGoods: () => void
-  addGoods: (data: Omit<Goods, 'id' | 'createdAt' | 'trackingNumber'>) => Goods
-  updateGoods: (id: string, data: Partial<Goods>) => void
-  deleteGoods: (id: string) => void
+  loadGoods: () => Promise<void>
+  addGoods: (data: Omit<Goods, 'id' | 'createdAt' | 'trackingNumber'>) => Promise<Goods>
+  updateGoods: (id: string, data: Partial<Goods>) => Promise<void>
+  updateGoodsStatus: (id: string, newStatus: Goods['status']) => Promise<{ success: boolean; error?: string }>
+  deleteGoods: (id: string) => Promise<void>
 
-  loadAgents: () => void
-  addAgent: (data: Omit<Agent, 'id' | 'createdAt'>) => Agent
-  updateAgent: (id: string, data: Partial<Agent>) => void
-  deleteAgent: (id: string) => void
+  loadAgents: () => Promise<void>
+  addAgent: (data: Omit<Agent, 'id' | 'createdAt'>) => Promise<Agent>
+  updateAgent: (id: string, data: Partial<Agent>) => Promise<void>
+  deleteAgent: (id: string) => Promise<void>
 
-  loadNotifications: () => void
-  markNotificationRead: (id: string) => void
-  markAllNotificationsRead: () => void
+  loadNotifications: () => Promise<void>
+  markNotificationRead: (id: string) => Promise<void>
+  markAllNotificationsRead: () => Promise<void>
 
-  loadTemplates: () => void
-  addTemplate: (data: Omit<DocumentTemplate, 'id' | 'createdAt' | 'updatedAt'>) => DocumentTemplate
-  updateTemplate: (id: string, data: Partial<DocumentTemplate>) => void
-  deleteTemplate: (id: string) => void
-  duplicateTemplate: (id: string) => DocumentTemplate | null
-  setDefaultTemplate: (id: string, type: TemplateType) => void
+  loadTemplates: () => Promise<void>
+  addTemplate: (data: Omit<DocumentTemplate, 'id' | 'createdAt' | 'updatedAt'>) => Promise<DocumentTemplate>
+  updateTemplate: (id: string, data: Partial<DocumentTemplate>) => Promise<void>
+  deleteTemplate: (id: string) => Promise<void>
+  duplicateTemplate: (id: string) => Promise<DocumentTemplate | null>
+  setDefaultTemplate: (id: string, type: TemplateType) => Promise<void>
   getDefaultTemplate: (type: TemplateType) => DocumentTemplate | undefined
 
-  loadSupplierTemplates: () => void
-  addSupplierTemplate: (data: Omit<SupplierDocumentTemplate, 'id' | 'createdAt'>) => SupplierDocumentTemplate
-  updateSupplierTemplate: (id: string, data: Partial<SupplierDocumentTemplate>) => SupplierDocumentTemplate | null
-  deleteSupplierTemplate: (id: string) => void
+  loadSupplierTemplates: () => Promise<void>
+  addSupplierTemplate: (data: Omit<SupplierDocumentTemplate, 'id' | 'createdAt'>) => Promise<SupplierDocumentTemplate>
+  updateSupplierTemplate: (id: string, data: Partial<SupplierDocumentTemplate>) => Promise<SupplierDocumentTemplate | null>
+  deleteSupplierTemplate: (id: string) => Promise<void>
 
-  loadSuppliers: () => void
-  addSupplier: (data: Omit<Supplier, 'id' | 'code' | 'createdAt' | 'updatedAt'>) => Supplier
-  updateSupplier: (id: string, data: Partial<Supplier>) => void
-  deleteSupplier: (id: string) => void
+  loadSuppliers: () => Promise<void>
+  addSupplier: (data: Omit<Supplier, 'id' | 'code' | 'createdAt' | 'updatedAt'>) => Promise<Supplier>
+  updateSupplier: (id: string, data: Partial<Supplier>) => Promise<void>
+  deleteSupplier: (id: string) => Promise<void>
 
-  loadSupplierProducts: () => void
-  addSupplierProduct: (data: Omit<SupplierProduct, 'id' | 'createdAt' | 'updatedAt'>) => SupplierProduct
-  updateSupplierProduct: (id: string, data: Partial<SupplierProduct>) => void
-  deleteSupplierProduct: (id: string) => void
+  loadSupplierProducts: () => Promise<void>
+  addSupplierProduct: (data: Omit<SupplierProduct, 'id' | 'createdAt' | 'updatedAt'>) => Promise<SupplierProduct>
+  updateSupplierProduct: (id: string, data: Partial<SupplierProduct>) => Promise<void>
+  deleteSupplierProduct: (id: string) => Promise<void>
 
-  loadSupplierCategories: () => void
-  addSupplierCategory: (data: Omit<SupplierCategoryEntity, 'id' | 'createdAt'>) => SupplierCategoryEntity
-  updateSupplierCategory: (id: string, data: Partial<SupplierCategoryEntity>) => void
-  deleteSupplierCategory: (id: string) => void
+  loadSupplierCategories: () => Promise<void>
+  addSupplierCategory: (data: Omit<SupplierCategoryEntity, 'id' | 'createdAt'>) => Promise<SupplierCategoryEntity>
+  updateSupplierCategory: (id: string, data: Partial<SupplierCategoryEntity>) => Promise<void>
+  deleteSupplierCategory: (id: string) => Promise<void>
 
-  loadPurchaseOrders: () => void
-  addPurchaseOrder: (data: Omit<PurchaseOrder, 'id' | 'poNumber' | 'totalAmount' | 'isDeleted' | 'createdAt' | 'updatedAt'> & { items?: Omit<PurchaseOrderItem, 'id' | 'purchaseOrderId' | 'createdAt' | 'updatedAt'>[] }) => PurchaseOrder
-  updatePurchaseOrder: (id: string, data: Partial<PurchaseOrder> & { items?: (Partial<PurchaseOrderItem> & { id?: string })[] }) => PurchaseOrder | null
-  updatePurchaseOrderStatus: (id: string, newStatus: POStatus) => { success: boolean; error?: string }
-  deletePurchaseOrder: (id: string) => void
+  loadPurchaseOrders: () => Promise<void>
+  addPurchaseOrder: (data: Omit<PurchaseOrder, 'id' | 'poNumber' | 'totalAmount' | 'isDeleted' | 'createdAt' | 'updatedAt'> & { items?: Omit<PurchaseOrderItem, 'id' | 'purchaseOrderId' | 'createdAt' | 'updatedAt'>[] }) => Promise<PurchaseOrder>
+  updatePurchaseOrder: (id: string, data: Partial<PurchaseOrder> & { items?: (Partial<PurchaseOrderItem> & { id?: string })[] }) => Promise<PurchaseOrder | null>
+  updatePurchaseOrderStatus: (id: string, newStatus: POStatus) => Promise<{ success: boolean; error?: string }>
+  deletePurchaseOrder: (id: string) => Promise<void>
 
-  loadPriceHistory: () => void
+  loadPriceHistory: () => Promise<void>
 
-  loadSupplierPayments: () => void
-  addSupplierPayment: (data: Omit<SupplierPayment, 'id' | 'paymentNumber' | 'isDeleted' | 'createdAt' | 'updatedAt'>) => SupplierPayment
-  updateSupplierPayment: (id: string, data: Partial<SupplierPayment>) => SupplierPayment | null
-  markPaymentAsFullyPaid: (id: string) => SupplierPayment | null
-  deleteSupplierPayment: (id: string) => void
-  getPOBalance: (purchaseOrderId: string) => { total: number; paid: number; remaining: number }
+  loadSupplierPayments: () => Promise<void>
+  addSupplierPayment: (data: Omit<SupplierPayment, 'id' | 'paymentNumber' | 'isDeleted' | 'createdAt' | 'updatedAt'>) => Promise<SupplierPayment>
+  updateSupplierPayment: (id: string, data: Partial<SupplierPayment>) => Promise<SupplierPayment | null>
+  markPaymentAsFullyPaid: (id: string) => Promise<SupplierPayment | null>
+  deleteSupplierPayment: (id: string) => Promise<void>
+  getPOBalance: (purchaseOrderId: string) => Promise<{ total: number; paid: number; remaining: number }>
 
-  loadSupplierAdjustments: () => void
-  addSupplierAdjustment: (data: SupplierAdjustmentInput) => SupplierAdjustment
-  updateSupplierAdjustment: (id: string, data: Partial<SupplierAdjustment>) => SupplierAdjustment | null
-  deleteSupplierAdjustment: (id: string) => void
+  loadSupplierAdjustments: () => Promise<void>
+  addSupplierAdjustment: (data: SupplierAdjustmentInput) => Promise<SupplierAdjustment>
+  updateSupplierAdjustment: (id: string, data: Partial<SupplierAdjustment>) => Promise<SupplierAdjustment | null>
+  deleteSupplierAdjustment: (id: string) => Promise<void>
 
-  // Phase 4: Documents (new model uses uploadedAt, no isDeleted)
-  loadSupplierDocuments: () => void
-  addSupplierDocument: (data: Omit<SupplierDocument, 'id' | 'uploadedAt'>) => SupplierDocument
-  updateSupplierDocument: (id: string, data: Partial<SupplierDocument>) => SupplierDocument | null
-  deleteSupplierDocument: (id: string) => void
+  loadSupplierDocuments: () => Promise<void>
+  addSupplierDocument: (data: Omit<SupplierDocument, 'id' | 'uploadedAt'>) => Promise<SupplierDocument>
+  updateSupplierDocument: (id: string, data: Partial<SupplierDocument>) => Promise<SupplierDocument | null>
+  deleteSupplierDocument: (id: string) => Promise<void>
 
-  // Phase 4: Communications
-  loadSupplierCommunications: () => void
-  addSupplierCommunication: (data: Omit<SupplierCommunication, 'id' | 'isDeleted' | 'createdAt' | 'updatedAt'>) => SupplierCommunication
-  updateSupplierCommunication: (id: string, data: Partial<SupplierCommunication>) => SupplierCommunication | null
-  deleteSupplierCommunication: (id: string) => void
+  loadSupplierCommunications: () => Promise<void>
+  addSupplierCommunication: (data: Omit<SupplierCommunication, 'id' | 'isDeleted' | 'createdAt' | 'updatedAt'>) => Promise<SupplierCommunication>
+  updateSupplierCommunication: (id: string, data: Partial<SupplierCommunication>) => Promise<SupplierCommunication | null>
+  deleteSupplierCommunication: (id: string) => Promise<void>
 
-  // Phase 4: Tasks
-  loadSupplierTasks: () => void
-  addSupplierTask: (data: Omit<SupplierTask, 'id' | 'isDeleted' | 'createdAt' | 'updatedAt'>) => SupplierTask
-  updateSupplierTask: (id: string, data: Partial<SupplierTask>) => SupplierTask | null
-  markTaskComplete: (id: string) => SupplierTask | null
-  deleteSupplierTask: (id: string) => void
+  loadSupplierTasks: () => Promise<void>
+  addSupplierTask: (data: Omit<SupplierTask, 'id' | 'isDeleted' | 'createdAt' | 'updatedAt'>) => Promise<SupplierTask>
+  updateSupplierTask: (id: string, data: Partial<SupplierTask>) => Promise<SupplierTask | null>
+  markTaskComplete: (id: string) => Promise<SupplierTask | null>
+  deleteSupplierTask: (id: string) => Promise<void>
 
-  // Phase 5: Ratings
-  loadSupplierRatings: () => void
-  upsertSupplierRating: (supplierId: string, data: Omit<SupplierRating, 'id' | 'supplierId' | 'overall' | 'ratedAt' | 'createdAt' | 'updatedAt'>) => SupplierRating
+  loadSupplierRatings: () => Promise<void>
+  upsertSupplierRating: (supplierId: string, data: Omit<SupplierRating, 'id' | 'supplierId' | 'overall' | 'ratedAt' | 'createdAt' | 'updatedAt'>) => Promise<SupplierRating>
   getSupplierRating: (supplierId: string) => SupplierRating | undefined
 
-  initializeData: () => void
-  resetData: () => void
+  initializeData: () => Promise<void>
+  resetData: () => Promise<void>
 }
 
 export const useAppStore = create<AppStore>()(
@@ -154,6 +159,8 @@ export const useAppStore = create<AppStore>()(
       companyName: 'كارغو بريدج',
       companyNameFr: 'CargoBridge',
       sidebarOpen: true,
+      isDataLoading: false,
+      dataError: null,
       goods: [],
       agents: [],
       notifications: [],
@@ -178,269 +185,267 @@ export const useAppStore = create<AppStore>()(
         document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr'
         document.documentElement.lang = language
       },
-
       setTheme: (theme) => {
         set({ theme })
         document.documentElement.classList.toggle('dark', theme === 'dark')
       },
-
       setRole: (role) => set({ role }),
       setCompanyName: (companyName) => set({ companyName }),
       setCompanyNameFr: (companyNameFr) => set({ companyNameFr }),
       toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
       setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
 
-      loadGoods: () => set({ goods: goodsService.getAll() }),
-      addGoods: (data) => { const c = goodsService.create(data); get().loadGoods(); return c },
-      updateGoods: (id, data) => { goodsService.update(id, data); get().loadGoods() },
-      deleteGoods: (id) => { goodsService.delete(id); get().loadGoods() },
-
-      loadAgents: () => set({ agents: agentService.getAll() }),
-      addAgent: (data) => { const c = agentService.create(data); get().loadAgents(); return c },
-      updateAgent: (id, data) => { agentService.update(id, data); get().loadAgents() },
-      deleteAgent: (id) => { agentService.delete(id); get().loadAgents() },
-
-      loadNotifications: () => set({ notifications: notificationService.getAll() }),
-      markNotificationRead: (id) => { notificationService.markRead(id); get().loadNotifications() },
-      markAllNotificationsRead: () => { notificationService.markAllRead(); get().loadNotifications() },
-
-      loadTemplates: () => set({ templates: templateService.getAll() }),
-      addTemplate: (data) => { const c = templateService.create(data); get().loadTemplates(); return c },
-      updateTemplate: (id, data) => { templateService.update(id, data); get().loadTemplates() },
-      deleteTemplate: (id) => { templateService.delete(id); get().loadTemplates() },
-      duplicateTemplate: (id) => { const c = templateService.duplicate(id); get().loadTemplates(); return c },
-      setDefaultTemplate: (id, type) => { templateService.setDefault(id, type); get().loadTemplates() },
-      getDefaultTemplate: (type) => templateService.getDefault(type),
-
-      loadSupplierTemplates: () => set({ supplierTemplates: supplierTemplateService.getAll() }),
-      addSupplierTemplate: (data) => { const c = supplierTemplateService.create(data); get().loadSupplierTemplates(); return c },
-      updateSupplierTemplate: (id, data) => { const c = supplierTemplateService.update(id, data); get().loadSupplierTemplates(); return c },
-      deleteSupplierTemplate: (id) => { supplierTemplateService.delete(id); get().loadSupplierTemplates() },
-
-      loadSuppliers: () => {
-        const list = supplierService.getAll()
-        list.forEach(s => {
-          paymentService.updateSupplierBalance(s.id)
-        })
-        set({ suppliers: supplierService.getAll() })
-      },
-      addSupplier: (data) => { const c = supplierService.create(data); get().loadSuppliers(); return c },
-      updateSupplier: (id, data) => { supplierService.update(id, data); get().loadSuppliers() },
-      deleteSupplier: (id) => { supplierService.delete(id); get().loadSuppliers() },
-
-      loadSupplierProducts: () => set({ supplierProducts: supplierProductService.getAll() }),
-      addSupplierProduct: (data) => { const c = supplierProductService.create(data); get().loadSupplierProducts(); return c },
-      updateSupplierProduct: (id, data) => { supplierProductService.update(id, data); get().loadSupplierProducts() },
-      deleteSupplierProduct: (id) => { supplierProductService.delete(id); get().loadSupplierProducts() },
-
-      loadSupplierCategories: () => set({ supplierCategories: supplierCategoryService.getAll() }),
-      addSupplierCategory: (data) => { const c = supplierCategoryService.create(data); get().loadSupplierCategories(); return c },
-      updateSupplierCategory: (id, data) => { supplierCategoryService.update(id, data); get().loadSupplierCategories() },
-      deleteSupplierCategory: (id) => { supplierCategoryService.delete(id); get().loadSupplierCategories() },
-
-      loadPurchaseOrders: () => {
-        set({
-          purchaseOrders: purchaseOrderService.getAll().filter(po => !po.isDeleted),
-          purchaseOrderItems: purchaseOrderService.getAllItems(),
-        })
-      },
-      addPurchaseOrder: (data) => {
-        const c = purchaseOrderService.create(data)
-        get().loadPurchaseOrders()
-        paymentService.updateSupplierBalance(data.supplierId)
-        get().loadSuppliers()
-        return c
-      },
-      updatePurchaseOrder: (id, data) => {
-        const c = purchaseOrderService.update(id, data)
-        get().loadPurchaseOrders()
-        if (c) {
-          paymentService.updateSupplierBalance(c.supplierId)
-          get().loadSuppliers()
-        }
-        return c
-      },
-      updatePurchaseOrderStatus: (id, newStatus) => {
-        const result = purchaseOrderService.updateStatus(id, newStatus)
+      loadGoods: async () => set({ goods: await goodsService.getAll() }),
+      addGoods: async (data) => { const c = await goodsService.create(data); await get().loadGoods(); return c },
+      updateGoods: async (id, data) => { await goodsService.update(id, data); await get().loadGoods() },
+      updateGoodsStatus: async (id, newStatus) => {
+        const result = await goodsService.updateStatus(id, newStatus)
         if (result.success) {
-          get().loadPurchaseOrders()
-          get().loadPriceHistory()
-          const po = purchaseOrderService.getById(id)
-          if (po) {
-            paymentService.updateSupplierBalance(po.supplierId)
-            get().loadSuppliers()
-          }
+          await get().loadGoods()
+          await get().loadAgents()
+        }
+        return result
+      },
+      deleteGoods: async (id) => { await goodsService.delete(id); await get().loadGoods() },
+
+      loadAgents: async () => set({ agents: await agentService.getAll() }),
+      addAgent: async (data) => { const c = await agentService.create(data); await get().loadAgents(); return c },
+      updateAgent: async (id, data) => { await agentService.update(id, data); await get().loadAgents() },
+      deleteAgent: async (id) => { await agentService.delete(id); await get().loadAgents() },
+
+      loadNotifications: async () => set({ notifications: await notificationService.getAll() }),
+      markNotificationRead: async (id) => { await notificationService.markRead(id); await get().loadNotifications() },
+      markAllNotificationsRead: async () => { await notificationService.markAllRead(); await get().loadNotifications() },
+
+      loadTemplates: async () => set({ templates: await templateService.getAll() }),
+      addTemplate: async (data) => { const c = await templateService.create(data); await get().loadTemplates(); return c },
+      updateTemplate: async (id, data) => { await templateService.update(id, data); await get().loadTemplates() },
+      deleteTemplate: async (id) => { await templateService.delete(id); await get().loadTemplates() },
+      duplicateTemplate: async (id) => { const c = await templateService.duplicate(id); await get().loadTemplates(); return c },
+      setDefaultTemplate: async (id, type) => { await templateService.setDefault(id, type); await get().loadTemplates() },
+      getDefaultTemplate: (type) => get().templates.find((t) => t.type === type && t.isDefault),
+
+      loadSupplierTemplates: async () => set({ supplierTemplates: await supplierTemplateService.getAll() }),
+      addSupplierTemplate: async (data) => { const c = await supplierTemplateService.create(data); await get().loadSupplierTemplates(); return c },
+      updateSupplierTemplate: async (id, data) => { const c = await supplierTemplateService.update(id, data); await get().loadSupplierTemplates(); return c },
+      deleteSupplierTemplate: async (id) => { await supplierTemplateService.delete(id); await get().loadSupplierTemplates() },
+
+      loadSuppliers: async () => set({ suppliers: await supplierService.getAll() }),
+      addSupplier: async (data) => { const c = await supplierService.create(data); await get().loadSuppliers(); return c },
+      updateSupplier: async (id, data) => { await supplierService.update(id, data); await get().loadSuppliers() },
+      deleteSupplier: async (id) => { await supplierService.delete(id); await get().loadSuppliers() },
+
+      loadSupplierProducts: async () => set({ supplierProducts: await supplierProductService.getAll() }),
+      addSupplierProduct: async (data) => { const c = await supplierProductService.create(data); await get().loadSupplierProducts(); return c },
+      updateSupplierProduct: async (id, data) => { await supplierProductService.update(id, data); await get().loadSupplierProducts() },
+      deleteSupplierProduct: async (id) => { await supplierProductService.delete(id); await get().loadSupplierProducts() },
+
+      loadSupplierCategories: async () => set({ supplierCategories: await supplierCategoryService.getAll() }),
+      addSupplierCategory: async (data) => { const c = await supplierCategoryService.create(data); await get().loadSupplierCategories(); return c },
+      updateSupplierCategory: async (id, data) => { await supplierCategoryService.update(id, data); await get().loadSupplierCategories() },
+      deleteSupplierCategory: async (id) => { await supplierCategoryService.delete(id); await get().loadSupplierCategories() },
+
+      loadPurchaseOrders: async () => {
+        const orders = await purchaseOrderService.getAll()
+        set({
+          purchaseOrders: orders.filter((po) => !po.isDeleted),
+          purchaseOrderItems: await purchaseOrderService.getAllItems(),
+        })
+      },
+      addPurchaseOrder: async (data) => {
+        const c = await purchaseOrderService.create(data)
+        await get().loadPurchaseOrders()
+        await get().loadSuppliers()
+        return c
+      },
+      updatePurchaseOrder: async (id, data) => {
+        const c = await purchaseOrderService.update(id, data)
+        await get().loadPurchaseOrders()
+        await get().loadSuppliers()
+        return c
+      },
+      updatePurchaseOrderStatus: async (id, newStatus) => {
+        const result = await purchaseOrderService.updateStatus(id, newStatus)
+        if (result.success) {
+          await get().loadPurchaseOrders()
+          await get().loadPriceHistory()
+          await get().loadSuppliers()
         }
         return { success: result.success, error: result.error }
       },
-      deletePurchaseOrder: (id) => {
-        const po = purchaseOrderService.getById(id)
-        purchaseOrderService.delete(id)
-        get().loadPurchaseOrders()
-        if (po) {
-          paymentService.updateSupplierBalance(po.supplierId)
-          get().loadSuppliers()
-        }
+      deletePurchaseOrder: async (id) => {
+        await purchaseOrderService.delete(id)
+        await get().loadPurchaseOrders()
+        await get().loadSuppliers()
       },
 
-      loadPriceHistory: () => {
-        set({ priceHistory: priceHistoryService.getAll() })
-      },
+      loadPriceHistory: async () => set({ priceHistory: await priceHistoryService.getAll() }),
 
-      loadSupplierPayments: () => {
-        set({ supplierPayments: paymentService.getAll().filter(p => !p.isDeleted) })
-      },
-      addSupplierPayment: (data) => {
-        const c = paymentService.create(data)
-        get().loadSupplierPayments()
-        get().loadSuppliers()
+      loadSupplierPayments: async () => set({ supplierPayments: await paymentService.getAll() }),
+      addSupplierPayment: async (data) => {
+        const c = await paymentService.create(data)
+        await get().loadSupplierPayments()
+        await get().loadSuppliers()
         return c
       },
-      updateSupplierPayment: (id, data) => {
-        const c = paymentService.update(id, data)
-        get().loadSupplierPayments()
-        get().loadSuppliers()
+      updateSupplierPayment: async (id, data) => {
+        const c = await paymentService.update(id, data)
+        await get().loadSupplierPayments()
+        await get().loadSuppliers()
         return c
       },
-      markPaymentAsFullyPaid: (id) => {
-        const c = paymentService.markAsFullyPaid(id)
-        get().loadSupplierPayments()
-        get().loadSuppliers()
+      markPaymentAsFullyPaid: async (id) => {
+        const c = await paymentService.markAsFullyPaid(id)
+        await get().loadSupplierPayments()
+        await get().loadSuppliers()
         return c
       },
-      deleteSupplierPayment: (id) => {
-        paymentService.delete(id)
-        get().loadSupplierPayments()
-        get().loadSuppliers()
+      deleteSupplierPayment: async (id) => {
+        await paymentService.delete(id)
+        await get().loadSupplierPayments()
+        await get().loadSuppliers()
       },
       getPOBalance: (purchaseOrderId) => paymentService.getPOBalance(purchaseOrderId),
 
-      loadSupplierAdjustments: () => {
-        set({ supplierAdjustments: adjustmentService.getAll().filter(a => !a.isDeleted) })
-      },
-      addSupplierAdjustment: (data) => {
-        const c = adjustmentService.create(data)
-        get().loadSupplierAdjustments()
+      loadSupplierAdjustments: async () => set({ supplierAdjustments: await adjustmentService.getAll() }),
+      addSupplierAdjustment: async (data) => {
+        const c = await adjustmentService.create(data)
+        await get().loadSupplierAdjustments()
+        await get().loadSuppliers()
         return c
       },
-      updateSupplierAdjustment: (id, data) => {
-        const c = adjustmentService.update(id, data)
-        get().loadSupplierAdjustments()
+      updateSupplierAdjustment: async (id, data) => {
+        const c = await adjustmentService.update(id, data)
+        await get().loadSupplierAdjustments()
+        await get().loadSuppliers()
         return c
       },
-      deleteSupplierAdjustment: (id) => {
-        adjustmentService.delete(id)
-        get().loadSupplierAdjustments()
+      deleteSupplierAdjustment: async (id) => {
+        await adjustmentService.delete(id)
+        await get().loadSupplierAdjustments()
+        await get().loadSuppliers()
       },
 
-      // Phase 4: Documents (new model – no isDeleted flag)
-      loadSupplierDocuments: () => {
-        set({ supplierDocuments: documentService.getAll() })
-      },
-      addSupplierDocument: (data) => {
-        const c = documentService.create(data)
-        get().loadSupplierDocuments()
+      loadSupplierDocuments: async () => set({ supplierDocuments: await documentService.getAll() }),
+      addSupplierDocument: async (data) => {
+        const c = await documentService.create(data)
+        await get().loadSupplierDocuments()
         return c
       },
-      updateSupplierDocument: (id, data) => {
-        const c = documentService.update(id, data)
-        get().loadSupplierDocuments()
+      updateSupplierDocument: async (id, data) => {
+        const c = await documentService.update(id, data)
+        await get().loadSupplierDocuments()
         return c
       },
-      deleteSupplierDocument: (id) => {
-        documentService.delete(id)
-        get().loadSupplierDocuments()
+      deleteSupplierDocument: async (id) => {
+        await documentService.delete(id)
+        await get().loadSupplierDocuments()
       },
 
-      // Phase 4: Communications
-      loadSupplierCommunications: () => {
-        set({ supplierCommunications: communicationService.getAll().filter(c => !c.isDeleted) })
-      },
-      addSupplierCommunication: (data) => {
-        const c = communicationService.create(data)
-        get().loadSupplierCommunications()
+      loadSupplierCommunications: async () => set({ supplierCommunications: await communicationService.getAll() }),
+      addSupplierCommunication: async (data) => {
+        const c = await communicationService.create(data)
+        await get().loadSupplierCommunications()
         return c
       },
-      updateSupplierCommunication: (id, data) => {
-        const c = communicationService.update(id, data)
-        get().loadSupplierCommunications()
+      updateSupplierCommunication: async (id, data) => {
+        const c = await communicationService.update(id, data)
+        await get().loadSupplierCommunications()
         return c
       },
-      deleteSupplierCommunication: (id) => {
-        communicationService.delete(id)
-        get().loadSupplierCommunications()
+      deleteSupplierCommunication: async (id) => {
+        await communicationService.delete(id)
+        await get().loadSupplierCommunications()
       },
 
-      // Phase 4: Tasks
-      loadSupplierTasks: () => {
-        set({ supplierTasks: taskService.getAll().filter(t => !t.isDeleted) })
-      },
-      addSupplierTask: (data) => {
-        const c = taskService.create(data)
-        get().loadSupplierTasks()
+      loadSupplierTasks: async () => set({ supplierTasks: await taskService.getAll() }),
+      addSupplierTask: async (data) => {
+        const c = await taskService.create(data)
+        await get().loadSupplierTasks()
         return c
       },
-      updateSupplierTask: (id, data) => {
-        const c = taskService.update(id, data)
-        get().loadSupplierTasks()
+      updateSupplierTask: async (id, data) => {
+        const c = await taskService.update(id, data)
+        await get().loadSupplierTasks()
         return c
       },
-      markTaskComplete: (id) => {
-        const c = taskService.markComplete(id)
-        get().loadSupplierTasks()
+      markTaskComplete: async (id) => {
+        const c = await taskService.markComplete(id)
+        await get().loadSupplierTasks()
         return c
       },
-      deleteSupplierTask: (id) => {
-        taskService.delete(id)
-        get().loadSupplierTasks()
+      deleteSupplierTask: async (id) => {
+        await taskService.delete(id)
+        await get().loadSupplierTasks()
       },
 
-      // Phase 5: Ratings
-      loadSupplierRatings: () => {
-        set({ supplierRatings: ratingService.getAll() })
-      },
-      upsertSupplierRating: (supplierId, data) => {
-        const c = ratingService.upsert(supplierId, data)
-        get().loadSupplierRatings()
+      loadSupplierRatings: async () => set({ supplierRatings: await ratingService.getAll() }),
+      upsertSupplierRating: async (supplierId, data) => {
+        const c = await ratingService.upsert(supplierId, data)
+        await get().loadSupplierRatings()
         return c
       },
-      getSupplierRating: (supplierId) => ratingService.getBySupplierId(supplierId),
+      getSupplierRating: (supplierId) => get().supplierRatings.find((r) => r.supplierId === supplierId),
 
-      initializeData: () => {
-        const { language, theme, loadGoods, loadAgents, loadNotifications, loadTemplates, loadSupplierTemplates, loadSuppliers, loadSupplierProducts, loadSupplierCategories, loadPurchaseOrders, loadPriceHistory, loadSupplierPayments, loadSupplierAdjustments, loadSupplierDocuments, loadSupplierCommunications, loadSupplierTasks, loadSupplierRatings } = get()
+      initializeData: async () => {
+        const { language, theme } = get()
         document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr'
         document.documentElement.lang = language
         document.documentElement.classList.toggle('dark', theme === 'dark')
-        loadGoods(); loadAgents(); loadNotifications(); loadTemplates()
-        loadSuppliers(); loadSupplierProducts(); loadSupplierCategories(); loadSupplierTemplates()
-        loadPurchaseOrders(); loadPriceHistory()
-        loadSupplierPayments(); loadSupplierAdjustments()
-        loadSupplierDocuments(); loadSupplierCommunications(); loadSupplierTasks()
-        loadSupplierRatings()
+        set({ isDataLoading: true, dataError: null })
+        try {
+          const data = await fetchBootstrap()
+          setCurrencyCache(data.currencies as Currency[])
+          setConversionCache(data.conversionRecords as ConversionRecord[])
+          setCalcCache(data.calculatorRecords as CalculatorRecord[])
+          set({
+            goods: data.goods as Goods[],
+            agents: data.agents as Agent[],
+            notifications: data.notifications as Notification[],
+            templates: data.templates as DocumentTemplate[],
+            supplierTemplates: data.supplierTemplates as SupplierDocumentTemplate[],
+            suppliers: data.suppliers as Supplier[],
+            supplierProducts: data.supplierProducts as SupplierProduct[],
+            supplierCategories: data.supplierCategories as SupplierCategoryEntity[],
+            purchaseOrders: data.purchaseOrders as PurchaseOrder[],
+            purchaseOrderItems: data.purchaseOrderItems as PurchaseOrderItem[],
+            priceHistory: data.priceHistory as PriceHistoryEntry[],
+            supplierPayments: data.supplierPayments as SupplierPayment[],
+            supplierAdjustments: data.supplierAdjustments as SupplierAdjustment[],
+            supplierDocuments: data.supplierDocuments as SupplierDocument[],
+            supplierCommunications: data.supplierCommunications as SupplierCommunication[],
+            supplierTasks: data.supplierTasks as SupplierTask[],
+            supplierRatings: data.supplierRatings as SupplierRating[],
+            companyName: data.organization.name,
+            companyNameFr: data.organization.nameFr,
+            role: (data.user.profile.role as UserRole) || get().role,
+            isDataLoading: false,
+          })
+        } catch (e) {
+          set({
+            isDataLoading: false,
+            dataError: e instanceof Error ? e.message : 'Failed to load data',
+          })
+        }
       },
 
-      resetData: () => {
-        goodsService.reset(); agentService.reset()
-        notificationService.reset(); templateService.reset(); supplierTemplateService.reset()
-        currencyService.reset(); conversionHistoryService.clear(); calcRecordService.reset()
-        supplierService.reset(); supplierProductService.reset(); supplierCategoryService.reset()
-        purchaseOrderService.reset(); priceHistoryService.reset()
-        paymentService.reset(); adjustmentService.reset()
-        documentService.reset(); communicationService.reset(); taskService.reset()
-        ratingService.reset()
-        get().initializeData()
+      resetData: async () => {
+        await goodsService.reset()
+        await get().initializeData()
       },
     }),
     {
       name: 'cargobridge_settings',
       partialize: (state) => ({
-        language: state.language, theme: state.theme,
-        role: state.role, companyName: state.companyName,
-        companyNameFr: state.companyNameFr, sidebarOpen: state.sidebarOpen,
+        language: state.language,
+        theme: state.theme,
+        companyName: state.companyName,
+        companyNameFr: state.companyNameFr,
+        sidebarOpen: state.sidebarOpen,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) state.t = createT(state.language)
       },
-    }
-  )
+    },
+  ),
 )

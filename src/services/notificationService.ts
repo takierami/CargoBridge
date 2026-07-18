@@ -1,53 +1,20 @@
 import type { Notification } from '../types'
-import { mockNotifications } from '../mock-data'
-
-const KEY = 'cargobridge_notifications'
+import { api } from '../lib/apiClient'
 
 export const notificationService = {
-  getAll(): Notification[] {
-    const stored = localStorage.getItem(KEY)
-    if (!stored) {
-      localStorage.setItem(KEY, JSON.stringify(mockNotifications))
-      return mockNotifications
-    }
-    try {
-      return JSON.parse(stored) as Notification[]
-    } catch {
-      localStorage.setItem(KEY, JSON.stringify(mockNotifications))
-      return mockNotifications
-    }
+  async getAll(): Promise<Notification[]> {
+    return api.getList<Notification>('/notifications/')
   },
 
-  getUnreadCount(): number {
-    return this.getAll().filter((n) => !n.read).length
+  async markRead(id: string): Promise<void> {
+    await api.patch(`/notifications/${id}/`, { read: true })
   },
 
-  create(data: Omit<Notification, 'id' | 'timestamp' | 'read'>): Notification {
-    const all = this.getAll()
-    const notif: Notification = {
-      ...data,
-      id: `notif-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      read: false,
-    }
-    all.unshift(notif)
-    localStorage.setItem(KEY, JSON.stringify(all))
-    return notif
+  async markAllRead(): Promise<void> {
+    await api.post('/notifications/mark_all_read/')
   },
 
-  markRead(id: string): void {
-    const all = this.getAll().map((n) =>
-      n.id === id ? { ...n, read: true } : n
-    )
-    localStorage.setItem(KEY, JSON.stringify(all))
-  },
-
-  markAllRead(): void {
-    const all = this.getAll().map((n) => ({ ...n, read: true }))
-    localStorage.setItem(KEY, JSON.stringify(all))
-  },
-
-  reset(): void {
-    localStorage.setItem(KEY, JSON.stringify(mockNotifications))
+  async reset(): Promise<void> {
+    await api.post('/reset/')
   },
 }

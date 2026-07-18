@@ -1,14 +1,16 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { ArrowLeft, Plus, Pencil, X, Trash2, Star, Phone, Mail, Globe, MapPin, Clock, Download, Eye, Upload, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
 import { cn } from '../../utils/cn'
 import { formatDate } from '../../../utils/dateUtils'
-import type { SupplierProduct, SupplierDocument, SupplierDocumentType } from '../../../types'
+import type { SupplierProduct, SupplierDocument, SupplierDocumentType, SupplierAdjustment, CommunicationType } from '../../../types'
+import { isOrgAdmin } from '../../../lib/roles'
+import { DEFAULT_TRANSACTION_CURRENCY, currenciesForSelect, currencySymbol } from '../../../lib/currencies'
 
-type Tab = 'overview' | 'products' | 'documents' | 'communications' | 'tasks' | 'performance' | 'rating'
-const TABS: Tab[] = ['overview', 'products', 'documents', 'communications', 'tasks', 'performance', 'rating']
+type Tab = 'overview' | 'products' | 'documents' | 'communications' | 'adjustments' | 'tasks' | 'performance' | 'rating'
+const TABS: Tab[] = ['overview', 'products', 'documents', 'communications', 'adjustments', 'tasks', 'performance', 'rating']
 
 function ProductForm({ initial, onSave, onCancel, t }: Readonly<{
   initial?: Partial<SupplierProduct>
@@ -21,7 +23,7 @@ function ProductForm({ initial, onSave, onCancel, t }: Readonly<{
     category: initial?.category || '',
     sku: initial?.sku || '',
     unitCost: initial?.unitCost || 0,
-    currency: initial?.currency || 'USD',
+    currency: initial?.currency || DEFAULT_TRANSACTION_CURRENCY,
     notes: initial?.notes || '',
   })
   const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }))
@@ -61,10 +63,9 @@ function ProductForm({ initial, onSave, onCancel, t }: Readonly<{
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.currency')}</label>
               <select value={form.currency} onChange={e => set('currency', e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
-                <option value="USD">USD</option>
-                <option value="CNY">CNY</option>
-                <option value="EUR">EUR</option>
-                <option value="DZD">DZD</option>
+                {currenciesForSelect(form.currency).map(c => (
+                  <option key={c.code} value={c.code}>{c.code}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -314,23 +315,34 @@ function DocumentForm({
 export function SupplierProfile() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { t, language, suppliers, supplierProducts, supplierDocuments, supplierCommunications, supplierTasks,
+  const { t, language, role, suppliers, supplierProducts, supplierDocuments, supplierCommunications, supplierAdjustments, supplierTasks,
     addSupplierProduct, updateSupplierProduct, deleteSupplierProduct,
     addSupplierDocument, deleteSupplierDocument,
-    deleteSupplierCommunication,
+    addSupplierCommunication, deleteSupplierCommunication,
+    addSupplierAdjustment, deleteSupplierAdjustment,
     markTaskComplete, deleteSupplierTask,
-    getSupplierRating } = useAppStore()
+    getSupplierRating, loadSuppliers } = useAppStore()
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [showProductForm, setShowProductForm] = useState(false)
   const [editProduct, setEditProduct] = useState<SupplierProduct | null>(null)
   const [showDocumentForm, setShowDocumentForm] = useState(false)
+  const [showCommForm, setShowCommForm] = useState(false)
+  const [commForm, setCommForm] = useState({ type: 'phone_call' as CommunicationType, summary: '', date: new Date().toISOString().slice(0, 10) })
+  const [showAdjForm, setShowAdjForm] = useState(false)
+  const [adjForm, setAdjForm] = useState({ type: 'credit' as SupplierAdjustment['type'], amount: 0, currency: DEFAULT_TRANSACTION_CURRENCY, reason: '', date: new Date().toISOString().slice(0, 10) })
 
   const supplier = useMemo(() => suppliers.find(s => s.id === id), [suppliers, id])
   const products = useMemo(() => supplierProducts.filter(p => p.supplierId === id), [supplierProducts, id])
   const documents = useMemo(() => supplierDocuments.filter(d => d.supplierId === id), [supplierDocuments, id])
   const communications = useMemo(() => supplierCommunications.filter(c => c.supplierId === id), [supplierCommunications, id])
+  const adjustments = useMemo(() => supplierAdjustments.filter(a => a.supplierId === id && !a.isDeleted), [supplierAdjustments, id])
   const tasks = useMemo(() => supplierTasks.filter(t => t.supplierId === id), [supplierTasks, id])
   const existingRating = useMemo(() => id ? getSupplierRating(id) : undefined, [id, getSupplierRating])
+
+  useEffect(() => {
+    if (!id) return
+    loadSuppliers()
+  }, [id, loadSuppliers])
 
   if (!supplier) {
     return (
@@ -354,11 +366,11 @@ export function SupplierProfile() {
   }
 
   const formatCurrency = (amount: number, currency: string) => {
-    const symbols: Record<string, string> = { USD: '$', CNY: '¥', EUR: '€', DZD: 'دج' }
-    return symbols[currency] + ' ' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return currencySymbol(currency) + ' ' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
   const handleSaveProduct = (data: Omit<SupplierProduct, 'id' | 'supplierId' | 'createdAt' | 'updatedAt'>) => {
+    if (!isOrgAdmin(role)) return
     if (editProduct) {
       updateSupplierProduct(editProduct.id, data)
     } else {
@@ -370,6 +382,7 @@ export function SupplierProfile() {
   }
 
   const handleDeleteProduct = (productId: string) => {
+    if (!isOrgAdmin(role)) return
     if (confirm(t('common.confirm'))) {
       deleteSupplierProduct(productId)
       toast.success(t('common.success'))
@@ -377,6 +390,7 @@ export function SupplierProfile() {
   }
 
   const handleSaveDocument = (data: Omit<SupplierDocument, 'id' | 'uploadedAt'>) => {
+    if (!isOrgAdmin(role)) return
     if (!supplier) return
     addSupplierDocument({ ...data, supplierId: supplier.id })
     toast.success(t('common.success'))
@@ -574,10 +588,11 @@ export function SupplierProfile() {
                     {formatCurrency(supplier.outstanding || 0, supplier.balanceCurrency || 'USD')}
                   </span>
                 </div>
+                <p className="text-xs text-gray-500 dark:text-gray-400 pt-1">{t('suppliers.balanceHelper')}</p>
               </div>
             </div>
 
-            {/* Quick Actions */}
+            {/* Quick Actions — match profile reference: both actions visible */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4">
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => navigate('/suppliers/purchase-orders/new?supplierId=' + supplier.id)} className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium transition-colors">
@@ -596,13 +611,15 @@ export function SupplierProfile() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
           <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900 dark:text-white">{t('suppliers.productCatalog')}</h3>
-            <button
-              onClick={() => { setEditProduct(null); setShowProductForm(true) }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              {t('suppliers.addProduct')}
-            </button>
+            {isOrgAdmin(role) && (
+              <button
+                onClick={() => { setEditProduct(null); setShowProductForm(true) }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                {t('suppliers.addProduct')}
+              </button>
+            )}
           </div>
 
           {products.length === 0 ? (
@@ -632,14 +649,18 @@ export function SupplierProfile() {
                       </td>
                       <td className="px-5 py-4 text-end">
                         <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => { setEditProduct(product); setShowProductForm(true) }}
-                            className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg">
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleDeleteProduct(product.id)}
-                            className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {isOrgAdmin(role) && (
+                            <>
+                              <button onClick={() => { setEditProduct(product); setShowProductForm(true) }}
+                                className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg">
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button onClick={() => handleDeleteProduct(product.id)}
+                                className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -655,9 +676,11 @@ export function SupplierProfile() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
           <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900 dark:text-white">{t('suppliers.documents')}</h3>
-            <button onClick={() => setShowDocumentForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-              <Plus className="w-4 h-4" /> {t('suppliers.addDocument')}
-            </button>
+            {isOrgAdmin(role) && (
+              <button onClick={() => setShowDocumentForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+                <Plus className="w-4 h-4" /> {t('suppliers.addDocument')}
+              </button>
+            )}
           </div>
           {documents.length === 0 ? (
             <div className="p-8 text-center text-gray-500 dark:text-gray-400">
@@ -703,9 +726,11 @@ export function SupplierProfile() {
                           <button onClick={() => handleDownloadDocument(doc)} className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg" title={t('common.download') || 'Download'}>
                             <Download className="w-3.5 h-3.5" />
                           </button>
-                          <button onClick={() => { if (confirm(t('common.confirm'))) { deleteSupplierDocument(doc.id); toast.success(t('common.success')) } }} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg" title={t('common.delete')}>
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {isOrgAdmin(role) && (
+                            <button onClick={() => { if (confirm(t('common.confirm'))) { deleteSupplierDocument(doc.id); toast.success(t('common.success')) } }} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg" title={t('common.delete')}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -721,7 +746,47 @@ export function SupplierProfile() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
           <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900 dark:text-white">{t('suppliers.communications')}</h3>
+            <button onClick={() => setShowCommForm(!showCommForm)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
+              <Plus className="w-4 h-4" /> {t('suppliers.addCommunication')}
+            </button>
           </div>
+          {showCommForm && (
+            <div className="p-5 border-b border-gray-200 dark:border-gray-700 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">{t('suppliers.communicationType')}</label>
+                  <select value={commForm.type} onChange={e => setCommForm(f => ({ ...f, type: e.target.value as CommunicationType }))}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
+                    {(['phone_call', 'meeting', 'email', 'wechat', 'whatsapp', 'other'] as CommunicationType[]).map(ct => (
+                      <option key={ct} value={ct}>{t(`suppliers.communicationTypes.${ct}`)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">{t('common.date')}</label>
+                  <input type="date" value={commForm.date} onChange={e => setCommForm(f => ({ ...f, date: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+                </div>
+                <div className="sm:col-span-1 flex items-end">
+                  <button
+                    onClick={async () => {
+                      if (!id || !commForm.summary.trim()) return
+                      await addSupplierCommunication({ supplierId: id, type: commForm.type, summary: commForm.summary, date: commForm.date, followUpRequired: false })
+                      setCommForm({ type: 'phone_call', summary: '', date: new Date().toISOString().slice(0, 10) })
+                      setShowCommForm(false)
+                      toast.success(t('common.success'))
+                    }}
+                    className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+                  >{t('common.save')}</button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">{t('suppliers.summary')}</label>
+                <input value={commForm.summary} onChange={e => setCommForm(f => ({ ...f, summary: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+              </div>
+            </div>
+          )}
           {communications.length === 0 ? (
             <div className="p-8 text-center text-gray-500 dark:text-gray-400"><p>{t('suppliers.noCommunications')}</p></div>
           ) : (
@@ -738,7 +803,7 @@ export function SupplierProfile() {
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   {communications.map(com => (
                     <tr key={com.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                      <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">{com.type}</td>
+                      <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">{t(`suppliers.communicationTypes.${com.type}`)}</td>
                       <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{com.summary}</td>
                       <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{com.date}</td>
                       <td className="px-5 py-4 text-end">
@@ -747,6 +812,100 @@ export function SupplierProfile() {
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'adjustments' && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+          <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900 dark:text-white">{t('suppliers.adjustments')}</h3>
+            {isOrgAdmin(role) && (
+              <button onClick={() => setShowAdjForm(!showAdjForm)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
+                <Plus className="w-4 h-4" /> {t('suppliers.addAdjustment')}
+              </button>
+            )}
+          </div>
+          {showAdjForm && (
+            <div className="p-5 border-b border-gray-200 dark:border-gray-700 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">{t('suppliers.adjustmentType')}</label>
+                <select value={adjForm.type} onChange={e => setAdjForm(f => ({ ...f, type: e.target.value as SupplierAdjustment['type'] }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
+                  <option value="credit">{t('suppliers.adjustmentTypes.credit')}</option>
+                  <option value="debit">{t('suppliers.adjustmentTypes.debit')}</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">{t('common.amount')}</label>
+                <input type="number" min="0" step="0.01" value={adjForm.amount || ''} onChange={e => setAdjForm(f => ({ ...f, amount: parseFloat(e.target.value) || 0 }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">{t('common.currency')}</label>
+                <select value={adjForm.currency} onChange={e => setAdjForm(f => ({ ...f, currency: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
+                  {currenciesForSelect(adjForm.currency).map(c => <option key={c.code} value={c.code}>{c.code}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">{t('common.date')}</label>
+                <input type="date" value={adjForm.date} onChange={e => setAdjForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+              </div>
+              <div className="flex items-end">
+                <button
+                  onClick={async () => {
+                    if (!isOrgAdmin(role)) return
+                    if (!id || !adjForm.amount || !adjForm.reason.trim()) return
+                    await addSupplierAdjustment({ supplierId: id, ...adjForm })
+                    setAdjForm({ type: 'credit', amount: 0, currency: DEFAULT_TRANSACTION_CURRENCY, reason: '', date: new Date().toISOString().slice(0, 10) })
+                    setShowAdjForm(false)
+                    toast.success(t('common.success'))
+                  }}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
+                >{t('common.save')}</button>
+              </div>
+              <div className="sm:col-span-2 lg:col-span-5">
+                <label className="block text-xs text-gray-500 mb-1">{t('suppliers.reason')}</label>
+                <input value={adjForm.reason} onChange={e => setAdjForm(f => ({ ...f, reason: e.target.value }))}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+              </div>
+            </div>
+          )}
+          {adjustments.length === 0 ? (
+            <div className="p-8 text-center text-gray-500 dark:text-gray-400"><p>{t('common.noData')}</p></div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-900/50">
+                  <tr>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.date')}</th>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.adjustmentType')}</th>
+                    <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('common.amount')}</th>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.reason')}</th>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {adjustments.map(adj => (
+                    <tr key={adj.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                      <td className="px-5 py-4 text-sm text-gray-500">{adj.date}</td>
+                      <td className="px-5 py-4 text-sm">{t(`suppliers.adjustmentTypes.${adj.type}`)}</td>
+                      <td className="px-5 py-4 text-end text-sm font-mono">{adj.amount.toLocaleString()} {adj.currency}</td>
+                      <td className="px-5 py-4 text-sm text-gray-500">{adj.reason}</td>
+                      <td className="px-5 py-4 text-end">
+                        {isOrgAdmin(role) && (
+                          <button onClick={() => deleteSupplierAdjustment(adj.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

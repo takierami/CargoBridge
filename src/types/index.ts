@@ -6,6 +6,7 @@ export type GoodsStatus =
   | 'ready_for_departure'
   | 'in_transit'
   | 'arrived'
+  | 'warehouse'
   | 'delivered'
   | 'delayed'
   | 'cancelled'
@@ -54,6 +55,16 @@ export interface Goods {
   notesFr?: string         // French notes
   photos?: string[]
   value?: number
+  valueCurrency?: string
+  hsCode?: string
+  incoterm?: string
+  freightCost?: number
+  insuranceCost?: number
+  dutyAmount?: number
+  dutyRate?: number
+  customsStatus?: 'not_started' | 'pending' | 'held' | 'cleared'
+  landedCost?: number
+  isDeleted?: boolean
 }
 
 export interface Message {
@@ -532,6 +543,7 @@ export interface SupplierTask {
   title: string
   description: string
   dueDate: string
+  priority: Priority
   status: TaskStatus
   completedAt?: string
   isDeleted: boolean

@@ -1,16 +1,28 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-// Import the ESM build of qr-scanner so Vite/Rollup can resolve the module
-import QrScanner from 'qr-scanner/qr-scanner.min.js'
+import { Link } from 'react-router'
+// Import the package entry so Vite resolves the QR worker correctly
+import QrScanner from 'qr-scanner'
+import qrWorkerUrl from 'qr-scanner/qr-scanner-worker.min.js?url'
 import {
-  ScanLine, Search, Camera, CameraOff, Package, User,
+  ScanLine, Search, Camera, CameraOff, Package,
   AlertTriangle, CheckCircle2, RefreshCw, ChevronDown,
-  Shield, Wifi, WifiOff, Bug, X, Info,
+  Shield, Wifi, WifiOff, Bug, X, Info, ExternalLink, Loader2, Clock,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
 import { StatusBadge } from '../ui/StatusBadge'
 import { formatDate } from '../../../utils/dateUtils'
 import { cn } from '../../utils/cn'
+import {
+  extractTrackToken,
+  trackingService,
+  type TrackAction,
+  type TrackPayload,
+} from '../../../services/trackingService'
 import type { Goods } from '../../../types'
+
+// Ensure Vite emits the worker asset (setter is deprecated but harmless on 1.4.x)
+QrScanner.WORKER_PATH = qrWorkerUrl
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -86,13 +98,21 @@ const PERM_COLOR: Record<PermissionStatus, string> = {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function Scanner() {
-  const { t, language, goods, agents } = useAppStore()
+  const { t, language, goods, agents, loadGoods } = useAppStore()
   const isFr = language === 'fr'
 
-  // Manual search
+  // Manual search / results
   const [manualInput, setManualInput] = useState('')
   const [result, setResult] = useState<Goods | null>(null)
+  const [trackResult, setTrackResult] = useState<TrackPayload | null>(null)
+  const [trackToken, setTrackToken] = useState<string | null>(null)
+  const [qrMissingTip, setQrMissingTip] = useState(false)
+  const [lookupLoading, setLookupLoading] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  const [selectedStatus, setSelectedStatus] = useState('')
+  const [statusNotes, setStatusNotes] = useState('')
+  const [savingStatus, setSavingStatus] = useState(false)
+  const [gps, setGps] = useState<{ latitude: number; longitude: number } | null>(null)
 
   // Camera state
   const [showPermissionDialog, setShowPermissionDialog] = useState(false)
@@ -132,25 +152,144 @@ export function Scanner() {
   const cameraLoadingRef = useRef(false)
   const selectedCameraIdRef = useRef('')
 
-  // ── Goods lookup ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => setGps({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      () => setGps(null),
+      { enableHighAccuracy: false, timeout: 8000 },
+    )
+  }, [])
 
-  const lookupGoods = useCallback((trackingNumber: string) => {
-    const trimmed = trackingNumber.trim().toUpperCase()
-    // Try exact match first, then case-insensitive
-    const found = goods.find(g => g.trackingNumber.toUpperCase() === trimmed)
-    if (found) {
-      setResult(found)
-      setNotFound(false)
-      setManualInput(found.trackingNumber)
-    } else {
-      setResult(null)
-      setNotFound(true)
+  // ── Stop camera (defined early for lookup) ────────────────────────────────
+
+  const stopCamera = useCallback(() => {
+    if (fpsTimerRef.current) {
+      clearInterval(fpsTimerRef.current)
+      fpsTimerRef.current = null
     }
-  }, [goods])
+    scannerRef.current?.stop()
+    scannerRef.current?.destroy()
+    scannerRef.current = null
+    if (videoRef.current?.srcObject instanceof MediaStream) {
+      videoRef.current.srcObject.getTracks().forEach(t => t.stop())
+      videoRef.current.srcObject = null
+    }
+    cameraActiveRef.current = false
+    cameraLoadingRef.current = false
+    setCameraActive(false)
+    setScannerReady(false)
+    setCameraLoading(false)
+    setDebugInfo(d => ({ ...d, streamStatus: 'inactive', fps: 0, resolution: '—' }))
+  }, [])
+
+  const applyTrackPayload = useCallback((token: string, payload: TrackPayload) => {
+    setTrackToken(token)
+    setTrackResult(payload)
+    setResult(null)
+    setNotFound(false)
+    setQrMissingTip(false)
+    setManualInput(payload.trackingNumber)
+    setSelectedStatus(payload.allowedActions[0]?.status || '')
+    setStatusNotes('')
+    stopCamera()
+  }, [stopCamera])
+
+  // ── Goods / QR lookup ─────────────────────────────────────────────────────
+
+  const lookupGoods = useCallback(async (raw: string) => {
+    const value = raw.trim()
+    if (!value) return
+
+    setLookupLoading(true)
+    setNotFound(false)
+    setQrMissingTip(false)
+
+    try {
+      const token = extractTrackToken(value)
+      if (token) {
+        const payload = await trackingService.getByToken(token)
+        applyTrackPayload(token, payload)
+        return
+      }
+
+      const trimmed = value.toUpperCase()
+      const found = goods.find(g => g.trackingNumber.toUpperCase() === trimmed)
+      if (!found) {
+        setResult(null)
+        setTrackResult(null)
+        setTrackToken(null)
+        setNotFound(true)
+        return
+      }
+
+      try {
+        const qr = await trackingService.getQr(found.id)
+        const payload = await trackingService.getByToken(qr.token)
+        applyTrackPayload(qr.token, payload)
+      } catch {
+        // No active QR — show store card and tip to generate from Goods
+        setResult(found)
+        setTrackResult(null)
+        setTrackToken(null)
+        setNotFound(false)
+        setQrMissingTip(true)
+        setManualInput(found.trackingNumber)
+      }
+    } catch (err) {
+      setResult(null)
+      setTrackResult(null)
+      setTrackToken(null)
+      setNotFound(true)
+      setDebugInfo(d => ({
+        ...d,
+        lastError: err instanceof Error ? err.message : String(err),
+      }))
+    } finally {
+      setLookupLoading(false)
+    }
+  }, [goods, applyTrackPayload])
 
   const handleManualSearch = () => {
     if (!manualInput.trim()) return
-    lookupGoods(manualInput)
+    void lookupGoods(manualInput)
+  }
+
+  const actionLabel = (action: TrackAction) => {
+    const key = `goods.qrActions.${action.actionKey}`
+    const translated = t(key)
+    return translated === key ? t(`goods.statuses.${action.status}`) : translated
+  }
+
+  const handleStatusUpdate = async () => {
+    if (!trackToken || !selectedStatus) return
+    setSavingStatus(true)
+    try {
+      const payload = await trackingService.updateStatus(trackToken, {
+        status: selectedStatus,
+        notes: statusNotes,
+        ...(gps || {}),
+        device: navigator.userAgent.slice(0, 255),
+      })
+      setTrackResult(payload)
+      setStatusNotes('')
+      setSelectedStatus(payload.allowedActions[0]?.status || '')
+      toast.success(t('common.success'))
+      void loadGoods()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('common.error'))
+    } finally {
+      setSavingStatus(false)
+    }
+  }
+
+  const clearResults = () => {
+    setResult(null)
+    setTrackResult(null)
+    setTrackToken(null)
+    setNotFound(false)
+    setQrMissingTip(false)
+    setManualInput('')
   }
 
   // ── Camera device enumeration ─────────────────────────────────────────────
@@ -208,8 +347,8 @@ export function Scanner() {
     setScanFlash(true)
     setTimeout(() => setScanFlash(false), 500)
 
-    // Look up goods
-    lookupGoods(value)
+    // Look up goods / track token
+    void lookupGoods(value)
 
     fpsCountRef.current += 1
   }, [lookupGoods])
@@ -312,75 +451,25 @@ export function Scanner() {
       scannerRef.current?.destroy()
       scannerRef.current = null
 
-      // If qr-scanner itself fails for an internal reason (worker load, etc.), try a
-      // raw getUserMedia fallback so at least the camera feed shows up
-      if (errType === 'unknown' && navigator.mediaDevices?.getUserMedia && videoRef.current) {
-        try {
-          const constraints: MediaStreamConstraints = {
-            video: selectedCameraIdRef.current
-              ? { deviceId: { exact: selectedCameraIdRef.current } }
-              : { facingMode: 'environment' },
-          }
-          const stream = await navigator.mediaDevices.getUserMedia(constraints)
-          videoRef.current.srcObject = stream
-          await videoRef.current.play()
-          setPermissionStatus('granted')
-          cameraActiveRef.current = true
-          setCameraActive(true)
-          // No QR scanning in fallback mode — just camera preview
-          setScannerReady(false)
-          setDebugInfo(d => ({ ...d, streamStatus: 'active (fallback — no QR)', lastError: rawMsg }))
-          fpsTimerRef.current = setInterval(() => {
-            const video = videoRef.current
-            const w = video?.videoWidth ?? 0
-            const h = video?.videoHeight ?? 0
-            setDebugInfo(d => ({ ...d, resolution: w && h ? `${w}×${h}` : '—' }))
-          }, 1000)
-          return
-        } catch (fallbackErr) {
-          const fbMsg = typeof fallbackErr === 'string' ? fallbackErr : ((fallbackErr as { message?: string })?.message ?? String(fallbackErr))
-          setCameraError(classifyError(fallbackErr))
-          setCameraErrorRaw(fbMsg)
-          setDebugInfo(d => ({ ...d, lastError: fbMsg, streamStatus: 'error' }))
-          cameraActiveRef.current = false
-          return
-        }
-      }
-
-      setCameraError(errType)
-      setCameraErrorRaw(rawMsg)
+      // Do not silently fall back to preview-without-decode — surface a clear error
+      // so users use manual entry (paste /t/{uuid} or tracking number) instead.
+      setCameraError(errType === 'unknown' ? 'unknown' : errType)
+      setCameraErrorRaw(
+        errType === 'unknown'
+          ? (isFr
+            ? `Décodage QR indisponible (${rawMsg}). Utilisez la saisie manuelle.`
+            : `مسح QR غير متاح (${rawMsg}). استخدم الإدخال اليدوي.`)
+          : rawMsg,
+      )
       if (errType === 'permission_denied') setPermissionStatus('denied')
       setDebugInfo(d => ({ ...d, lastError: rawMsg, streamStatus: 'error' }))
+      setScannerReady(false)
       cameraActiveRef.current = false
     } finally {
       cameraLoadingRef.current = false
       setCameraLoading(false)
     }
-  }, [handleScanSuccess, handleScanError])
-
-  // ── Stop camera ───────────────────────────────────────────────────────────
-
-  const stopCamera = useCallback(() => {
-    if (fpsTimerRef.current) {
-      clearInterval(fpsTimerRef.current)
-      fpsTimerRef.current = null
-    }
-    // Stop QrScanner if running
-    scannerRef.current?.stop()
-    scannerRef.current?.destroy()
-    scannerRef.current = null
-    // Stop raw fallback stream if any
-    if (videoRef.current?.srcObject instanceof MediaStream) {
-      videoRef.current.srcObject.getTracks().forEach(t => t.stop())
-      videoRef.current.srcObject = null
-    }
-    cameraActiveRef.current = false
-    cameraLoadingRef.current = false
-    setCameraActive(false)
-    setScannerReady(false)
-    setCameraLoading(false)
-    setDebugInfo(d => ({ ...d, streamStatus: 'inactive', fps: 0, resolution: '—' }))
-  }, [])
+  }, [handleScanSuccess, handleScanError, isFr])
 
   // ── Camera switch ─────────────────────────────────────────────────────────
 
@@ -448,9 +537,7 @@ export function Scanner() {
         <div>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('scanner.title')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            {isFr
-              ? 'Scannez un QR code ou saisissez le numéro de suivi manuellement'
-              : 'مسح QR أو إدخال رقم التتبع يدوياً'}
+            {t('scanner.subtitle')}
           </p>
         </div>
         <div className="flex gap-2">
@@ -722,9 +809,10 @@ export function Scanner() {
               />
               <button
                 onClick={handleManualSearch}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
+                disabled={lookupLoading}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50"
               >
-                <Search className="w-4 h-4" />
+                {lookupLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 {t('scanner.scan')}
               </button>
             </div>
@@ -736,7 +824,7 @@ export function Scanner() {
                 {goods.slice(0, 5).map(g => (
                   <button
                     key={g.id}
-                    onClick={() => { setManualInput(g.trackingNumber); lookupGoods(g.trackingNumber) }}
+                    onClick={() => { setManualInput(g.trackingNumber); void lookupGoods(g.trackingNumber) }}
                     className="px-2 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded text-xs font-mono text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors border border-transparent hover:border-blue-200 dark:hover:border-blue-700"
                   >
                     {g.trackingNumber}
@@ -749,8 +837,15 @@ export function Scanner() {
 
         {/* ── Right: Results ── */}
         <div>
+          {lookupLoading && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-12 text-center">
+              <Loader2 className="w-10 h-10 mx-auto animate-spin text-blue-600 mb-3" />
+              <p className="text-sm text-gray-500">{t('scanner.scanning')}</p>
+            </div>
+          )}
+
           {/* Not found */}
-          {notFound && (
+          {!lookupLoading && notFound && (
             <div className="bg-red-50 dark:bg-red-900/20 rounded-2xl border border-red-200 dark:border-red-800 p-8 text-center">
               <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-3" />
               <p className="font-semibold text-red-700 dark:text-red-400">{t('scanner.noResult')}</p>
@@ -763,20 +858,122 @@ export function Scanner() {
             </div>
           )}
 
-          {/* Result card */}
-          {result && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
-              {/* Header */}
+          {/* Track payload (goods QR resolved) */}
+          {!lookupLoading && trackResult && trackToken && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm space-y-0">
               <div className="p-5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
                 <div className="flex items-start gap-3">
                   <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0">
-                    {result.status === 'delivered'
+                    {trackResult.status === 'delivered'
                       ? <CheckCircle2 className="w-5 h-5 text-white" />
-                      : result.status === 'delayed'
+                      : trackResult.status === 'delayed'
                       ? <AlertTriangle className="w-5 h-5 text-white" />
                       : <Package className="w-5 h-5 text-white" />}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-mono text-blue-600 dark:text-blue-400 font-semibold tracking-wider">
+                      {trackResult.trackingNumber}
+                    </p>
+                    <h3 className="font-semibold text-gray-900 dark:text-white mt-0.5 leading-tight">
+                      {isFr && trackResult.descriptionFr ? trackResult.descriptionFr : trackResult.description}
+                    </h3>
+                    <div className="mt-1.5">
+                      <StatusBadge status={trackResult.status} type="goods" label={t(`goods.statuses.${trackResult.status}`)} size="sm" />
+                    </div>
+                  </div>
+                  <button
+                    onClick={clearResults}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <InfoCard label={t('goods.category')} value={t(`goods.categories.${trackResult.category}`) || trackResult.category} />
+                  <InfoCard label={t('goods.quantity')} value={`${trackResult.quantity}`} />
+                  <InfoCard label={t('goods.agent')} value={trackResult.agentName || t('goods.noAgent')} />
+                  <InfoCard
+                    label={t('goods.transportType')}
+                    value={trackResult.transportType ? t(`goods.transportTypes.${trackResult.transportType}`) : '—'}
+                  />
+                  <InfoCard label={t('goods.departureDate')} value={formatDate(trackResult.departureDate, language)} />
+                  <InfoCard label={t('goods.expectedArrival')} value={formatDate(trackResult.expectedArrivalDate, language)} accent />
+                </div>
+
+                <Link
+                  to={`/t/${trackToken}`}
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-blue-200 dark:border-blue-800 text-sm font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  {t('scanner.openTrackPage')}
+                </Link>
+
+                <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-3">
+                  <h4 className="font-semibold text-sm text-gray-900 dark:text-white">{t('tracking.updateStatus')}</h4>
+                  {trackResult.statusConsistent === false && (
+                    <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                      {t('tracking.statusInconsistent')}
+                    </p>
+                  )}
+                  {trackResult.allowedActions.length === 0 ? (
+                    <p className="flex items-center gap-2 text-sm text-gray-500">
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      {t('tracking.noActions')}
+                    </p>
+                  ) : (
+                    <>
+                      <div className="grid gap-2">
+                        {trackResult.allowedActions.map((action) => (
+                          <button
+                            key={action.status}
+                            type="button"
+                            onClick={() => setSelectedStatus(action.status)}
+                            className={cn(
+                              'rounded-xl border px-3 py-2.5 text-start text-sm font-medium transition-colors',
+                              selectedStatus === action.status
+                                ? 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
+                                : 'border-gray-200 bg-gray-50 text-gray-800 hover:border-blue-300 dark:border-gray-600 dark:bg-gray-900/40 dark:text-gray-200',
+                            )}
+                          >
+                            {actionLabel(action)}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={statusNotes}
+                        onChange={(e) => setStatusNotes(e.target.value)}
+                        rows={2}
+                        placeholder={t('tracking.notesPlaceholder')}
+                        className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                      />
+                      <button
+                        type="button"
+                        disabled={savingStatus || !selectedStatus}
+                        onClick={() => void handleStatusUpdate()}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {savingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clock className="h-4 w-4" />}
+                        {t('common.save')}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Store card without QR */}
+          {!lookupLoading && result && !trackResult && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+              <div className="p-5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20">
+                <div className="flex items-start gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0">
+                    <Package className="w-5 h-5 text-white" />
+                  </div>
+                  <div className="min-w-0 flex-1">
                     <p className="text-xs font-mono text-blue-600 dark:text-blue-400 font-semibold tracking-wider">
                       {result.trackingNumber}
                     </p>
@@ -787,87 +984,28 @@ export function Scanner() {
                       <StatusBadge status={result.status} type="goods" label={t(`goods.statuses.${result.status}`)} size="sm" />
                     </div>
                   </div>
-                  {/* Dismiss */}
                   <button
-                    onClick={() => { setResult(null); setNotFound(false); setManualInput('') }}
-                    className="ms-auto p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
+                    onClick={clearResults}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex-shrink-0"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
-              {/* Details grid */}
               <div className="p-5 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <InfoCard
-                    label={t('goods.category')}
-                    value={t(`goods.categories.${result.category}`)}
-                  />
-                  <InfoCard
-                    label={t('goods.quantity')}
-                    value={`${result.quantity} ${t('goods.pieces')}`}
-                  />
-                  {result.weight && (
-                    <InfoCard
-                      label={t('goods.weight')}
-                      value={`${result.weight} ${isFr ? 'kg' : 'كجم'}`}
-                    />
-                  )}
-                  {result.value && (
-                    <InfoCard
-                      label={t('goods.value')}
-                      value={`${result.value.toLocaleString(isFr ? 'fr-FR' : 'ar-DZ')} ${isFr ? 'DZD' : 'دج'}`}
-                      accent
-                    />
-                  )}
-                  {result.transportType && (
-                    <InfoCard
-                      label={t('goods.transportType')}
-                      value={t(`goods.transportTypes.${result.transportType}`)}
-                    />
-                  )}
-                  <InfoCard
-                    label={t('goods.departureDate')}
-                    value={formatDate(result.departureDate, language)}
-                  />
-                  <InfoCard
-                    label={t('goods.expectedArrival')}
-                    value={formatDate(result.expectedArrivalDate, language)}
-                    accent
-                  />
-                  {result.arrivalDate && (
-                    <InfoCard
-                      label={isFr ? "Date d'arrivée" : 'تاريخ الوصول'}
-                      value={formatDate(result.arrivalDate, language)}
-                      className="col-span-2"
-                      greenAccent
-                    />
-                  )}
-                </div>
-
-                {/* Agent card */}
-                {agent && (
-                  <div className="flex items-center gap-3 p-3 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold flex-shrink-0 text-sm">
-                      {agent.name.charAt(0)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-gray-500">{t('goods.agent')}</p>
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white">{agentName}</p>
-                      {agent.nameFr && isFr && agent.name !== agent.nameFr && (
-                        <p className="text-xs text-gray-400">{agent.name}</p>
-                      )}
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <User className="w-3 h-3 text-gray-400" />
-                        <p className="text-xs font-mono text-gray-500">{agent.phone}</p>
-                      </div>
-                    </div>
-                    <StatusBadge status={agent.status} type="agent" label={t(`agents.statuses.${agent.status}`)} size="sm" />
+                {qrMissingTip && (
+                  <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2.5 text-xs text-amber-800 dark:text-amber-200">
+                    {t('scanner.generateQrFirst')}
                   </div>
                 )}
-
-                {/* Notes */}
+                <div className="grid grid-cols-2 gap-3">
+                  <InfoCard label={t('goods.category')} value={t(`goods.categories.${result.category}`)} />
+                  <InfoCard label={t('goods.quantity')} value={`${result.quantity} ${t('goods.pieces')}`} />
+                  {agent && (
+                    <InfoCard label={t('goods.agent')} value={agentName || agent.name} className="col-span-2" />
+                  )}
+                </div>
                 {goodsNotes && (
                   <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-700">
                     <p className="text-xs text-gray-500 mb-1">{t('goods.notes')}</p>
@@ -879,7 +1017,7 @@ export function Scanner() {
           )}
 
           {/* Empty state */}
-          {!result && !notFound && (
+          {!lookupLoading && !result && !trackResult && !notFound && (
             <div className="bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 p-12 text-center">
               <ScanLine className="w-16 h-16 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
               <p className="font-medium text-gray-500 dark:text-gray-400">{t('scanner.goodsInfo')}</p>

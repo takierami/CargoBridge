@@ -2,14 +2,14 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import {
   ArrowLeftRight, History, Calculator as CalcIcon, Plus, Edit2, Trash2,
   Copy, Check, ChevronDown, RefreshCw, Download, Search, TrendingUp,
-  Package, DollarSign, Settings2, X, AlertCircle,
+  Package, DollarSign, Settings2, X, AlertCircle, Save, RotateCcw,
 } from 'lucide-react'
 import { useAppStore } from '../../../store/appStore'
 import {
   currencyService, conversionHistoryService,
-  exchangeRateService,
+  exchangeRateService, calcRecordService,
 } from '../../../services/currencyService'
-import type { Currency, ConversionRecord } from '../../../types'
+import type { Currency, ConversionRecord, CalculatorRecord } from '../../../types'
 import { formatDate } from '../../../utils/dateUtils'
 import { toast } from 'sonner'
 
@@ -249,6 +249,11 @@ export function Calculator() {
     productsValue: '', transportCost: '', agentCommission: '', packagingCost: '',
     customsCost: '', warehouseCost: '', miscCost: '',
   })
+  const [shipmentLabel, setShipmentLabel] = useState('')
+  const [savedCalcs, setSavedCalcs] = useState<CalculatorRecord[]>(() =>
+    calcRecordService.getAll().filter(r => r.type === 'shipment_cost'),
+  )
+  const [savingShipment, setSavingShipment] = useState(false)
 
   // Profit inputs
   const [profitForm, setProfitForm] = useState({ sellingPrice: '', totalCost: '' })
@@ -261,18 +266,13 @@ export function Calculator() {
   const [basicResult, setBasicResult] = useState<number | null>(null)
   const [basicError, setBasicError] = useState('')
 
-  // Force re-render when rates change (listen to storage events)
+  // Refresh currencies when storage changes (other tabs)
   useEffect(() => {
     const handleStorageChange = () => {
       setCurrencies(currencyService.getAll())
     }
     window.addEventListener('storage', handleStorageChange)
-    // Also poll periodically for same-tab updates
-    const interval = setInterval(handleStorageChange, 500)
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      clearInterval(interval)
-    }
+    return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
 
   // Helper to get currency object from code (always fresh from localStorage)
@@ -281,14 +281,13 @@ export function Calculator() {
   }, [])
 
   // ── Converter logic ────────────────────────────────────────────────────────
-  const doConvert = () => {
+  const doConvert = async () => {
     const n = parseFloat(amount.replace(/,/g, ''))
     if (isNaN(n)) return
-    // ALWAYS use exchangeRateService for fresh rates from localStorage
     const result = exchangeRateService.convert(n, fromCode, toCode)
     setConverted(result)
     const currentRate = exchangeRateService.getRate(fromCode, toCode)
-    const record = conversionHistoryService.add({
+    const record = await conversionHistoryService.add({
       fromCode: fromCode, toCode: toCode,
       fromAmount: n, toAmount: result,
       rate: currentRate,
@@ -316,16 +315,16 @@ export function Calculator() {
     setCurrencies(all)
   }
 
-  const handleSaveCurrency = (data: Omit<Currency, 'id' | 'createdAt'>) => {
+  const handleSaveCurrency = async (data: Omit<Currency, 'id' | 'createdAt'>) => {
     if (editingCurrency) {
-      const result = currencyService.update(editingCurrency.id, data)
+      const result = await currencyService.update(editingCurrency.id, data)
       if (!result.success) {
         toast.error(result.error || t('common.error'))
         return
       }
       toast.success(t('calculator.saved'))
     } else {
-      const result = currencyService.create(data)
+      const result = await currencyService.create(data)
       if ('error' in result) {
         toast.error(result.error)
         return
@@ -337,8 +336,8 @@ export function Calculator() {
     setEditingCurrency(null)
   }
 
-  const handleDeleteCurrency = (id: string) => {
-    const deleted = currencyService.delete(id)
+  const handleDeleteCurrency = async (id: string) => {
+    const deleted = await currencyService.delete(id)
     if (!deleted) {
       toast.error('Cannot delete base currency')
       return
@@ -352,6 +351,74 @@ export function Calculator() {
     const vals = Object.values(shipment).map(v => parseFloat(v) || 0)
     return vals.reduce((a, b) => a + b, 0)
   }, [shipment])
+
+  const refreshSavedCalcs = useCallback(async () => {
+    const all = await calcRecordService.loadAll()
+    setSavedCalcs(all.filter(r => r.type === 'shipment_cost'))
+  }, [])
+
+  useEffect(() => {
+    if (tab === 'calc' && calcMode === 'shipment') {
+      void refreshSavedCalcs()
+    }
+  }, [tab, calcMode, refreshSavedCalcs])
+
+  const handleSaveShipment = async () => {
+    if (shipmentTotal <= 0) return
+    setSavingShipment(true)
+    try {
+      const inputs: Record<string, number> = {}
+      for (const [k, v] of Object.entries(shipment)) {
+        inputs[k] = parseFloat(v) || 0
+      }
+      const when = new Date().toLocaleString(isFr ? 'fr-FR' : 'ar-DZ')
+      const label = shipmentLabel.trim() || `${t('calculator.shipmentCost')} · ${when}`
+      await calcRecordService.add({
+        type: 'shipment_cost',
+        label,
+        inputs,
+        result: shipmentTotal,
+        currency: calcCurCode,
+      })
+      setShipmentLabel('')
+      await refreshSavedCalcs()
+      toast.success(t('calculator.saved'))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('common.error'))
+    } finally {
+      setSavingShipment(false)
+    }
+  }
+
+  const handleLoadShipment = (rec: CalculatorRecord) => {
+    const next = {
+      productsValue: '',
+      transportCost: '',
+      agentCommission: '',
+      packagingCost: '',
+      customsCost: '',
+      warehouseCost: '',
+      miscCost: '',
+    }
+    for (const key of Object.keys(next) as (keyof typeof next)[]) {
+      const val = rec.inputs[key]
+      next[key] = val != null && val !== 0 ? String(val) : (val === 0 ? '0' : '')
+    }
+    setShipment(next)
+    if (rec.currency) setCalcCurCode(rec.currency)
+    setShipmentLabel(rec.label)
+    toast.success(t('calculator.loadSaved'))
+  }
+
+  const handleDeleteSavedCalc = async (id: string) => {
+    try {
+      await calcRecordService.delete(id)
+      setSavedCalcs(prev => prev.filter(r => r.id !== id))
+      toast.success(t('calculator.saved'))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('common.error'))
+    }
+  }
 
   // ── Profit calc ───────────────────────────────────────────────────────────
   const profitResult = useMemo(() => {
@@ -398,13 +465,13 @@ export function Calculator() {
     setRateError(null)
   }
 
-  const commitRate = (cur: Currency) => {
+  const commitRate = async (cur: Currency) => {
     const val = parseFloat(editingRateValue)
     if (isNaN(val) || val <= 0) {
       setRateError(t('calculator.invalidRate') || 'Rate must be a positive number')
       return
     }
-    const result = currencyService.updateRate(cur.id, val)
+    const result = await currencyService.updateRate(cur.id, val)
     if (!result.success) {
       setRateError(result.error || 'Invalid rate')
       toast.error(result.error || 'Invalid rate')
@@ -439,8 +506,8 @@ export function Calculator() {
     URL.revokeObjectURL(url)
   }
 
-  const clearHistory = () => {
-    conversionHistoryService.clear()
+  const clearHistory = async () => {
+    await conversionHistoryService.clear()
     setHistory([])
   }
 
@@ -819,14 +886,85 @@ export function Calculator() {
                   </div>
                 ))}
               </div>
-              <div className="pt-3 border-t border-gray-100 dark:border-gray-700">
-                <div className="flex items-center justify-between">
+              <div className="pt-3 border-t border-gray-100 dark:border-gray-700 space-y-3">
+                <div className="flex items-center justify-between gap-3">
                   <span className="font-semibold text-gray-700 dark:text-gray-300">{t('calculator.totalCost')}</span>
                   <span className="text-2xl font-bold text-blue-600 dark:text-blue-400 font-mono">
                     {calcCur.symbol} {fmt(shipmentTotal)}
                   </span>
                 </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('calculator.calcLabel')}</label>
+                  <input
+                    value={shipmentLabel}
+                    onChange={e => setShipmentLabel(e.target.value)}
+                    placeholder={t('calculator.shipmentCost')}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={savingShipment || shipmentTotal <= 0}
+                  onClick={() => void handleSaveShipment()}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  {savingShipment ? '…' : t('calculator.saveResult')}
+                </button>
               </div>
+            </div>
+          )}
+
+          {/* ── Saved shipment calcs ── */}
+          {calcMode === 'shipment' && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 space-y-3">
+              <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                <History className="w-4 h-4 text-blue-500" />
+                {t('calculator.savedCalcs')}
+              </h3>
+              {savedCalcs.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">
+                  {t('calculator.noSavedCalcs')}
+                </p>
+              ) : (
+                <ul className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {savedCalcs.map(rec => {
+                    const cur = exchangeRateService.getByCode(rec.currency)
+                    return (
+                      <li key={rec.id} className="py-3 flex flex-wrap items-center gap-2 justify-between">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{rec.label}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            <span className="font-mono text-blue-600 dark:text-blue-400">
+                              {cur?.symbol ?? rec.currency} {fmt(rec.result)}
+                            </span>
+                            {' · '}
+                            {formatDate(rec.timestamp, language)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleLoadShipment(rec)}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center gap-1"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            {t('calculator.loadSaved')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteSavedCalc(rec.id)}
+                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            {t('calculator.deleteSaved')}
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </div>
           )}
 

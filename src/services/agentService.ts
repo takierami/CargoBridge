@@ -1,58 +1,41 @@
 import type { Agent } from '../types'
-import { mockAgents } from '../mock-data'
-
-const KEY = 'cargobridge_agents'
+import { api } from '../lib/apiClient'
 
 export const agentService = {
-  getAll(): Agent[] {
-    const stored = localStorage.getItem(KEY)
-    if (!stored) {
-      localStorage.setItem(KEY, JSON.stringify(mockAgents))
-      return mockAgents
-    }
+  async getAll(): Promise<Agent[]> {
+    return api.getList<Agent>('/agents/')
+  },
+
+  async getById(id: string): Promise<Agent | undefined> {
     try {
-      return JSON.parse(stored) as Agent[]
+      return await api.get<Agent>(`/agents/${id}/`)
     } catch {
-      localStorage.setItem(KEY, JSON.stringify(mockAgents))
-      return mockAgents
+      return undefined
     }
   },
 
-  getById(id: string): Agent | undefined {
-    return this.getAll().find((a) => a.id === id)
+  async create(data: Omit<Agent, 'id' | 'createdAt'>): Promise<Agent> {
+    return api.post<Agent>('/agents/', data)
   },
 
-  create(data: Omit<Agent, 'id' | 'createdAt'>): Agent {
-    const all = this.getAll()
-    const newAgent: Agent = {
-      ...data,
-      id: `agent-${Date.now()}`,
-      createdAt: new Date().toISOString(),
+  async update(id: string, data: Partial<Agent>): Promise<Agent | null> {
+    try {
+      return await api.patch<Agent>(`/agents/${id}/`, data)
+    } catch {
+      return null
     }
-    all.push(newAgent)
-    localStorage.setItem(KEY, JSON.stringify(all))
-    return newAgent
   },
 
-  update(id: string, data: Partial<Agent>): Agent | null {
-    const all = this.getAll()
-    const idx = all.findIndex((a) => a.id === id)
-    if (idx === -1) return null
-    all[idx] = { ...all[idx], ...data }
-    localStorage.setItem(KEY, JSON.stringify(all))
-    return all[idx]
+  async delete(id: string): Promise<boolean> {
+    try {
+      await api.delete(`/agents/${id}/`)
+      return true
+    } catch {
+      return false
+    }
   },
 
-  delete(id: string): boolean {
-    const all = this.getAll()
-    const idx = all.findIndex(a => a.id === id)
-    if (idx === -1) return false
-    const filtered = all.filter((a) => a.id !== id)
-    localStorage.setItem(KEY, JSON.stringify(filtered))
-    return true
-  },
-
-  reset(): void {
-    localStorage.setItem(KEY, JSON.stringify(mockAgents))
+  async reset(): Promise<void> {
+    await api.post('/reset/')
   },
 }

@@ -1,24 +1,42 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router'
-import { ArrowLeft, Package, User, Calendar, FileText, CheckCircle2, Clock, AlertTriangle, Receipt } from 'lucide-react'
+import { ArrowLeft, Package, User, FileText, CheckCircle2, Clock, AlertTriangle, Receipt, QrCode } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
 import { StatusBadge, PriorityBadge } from '../ui/StatusBadge'
 import { formatDate } from '../../../utils/dateUtils'
 import { ReceiptModal } from '../ui/ReceiptModal'
+import { GoodsQrModal } from '../GoodsQrModal'
+import { trackingService } from '../../../services/trackingService'
+import { goodsService } from '../../../services/goodsService'
 import type { GoodsStatus, TemplateType } from '../../../types'
+import { isOrgAdmin } from '../../../lib/roles'
 
 const STATUS_ORDER: GoodsStatus[] = [
-  'draft', 'assigned', 'ready_for_departure', 'in_transit', 'arrived', 'delivered', 'delayed', 'cancelled'
+  'draft', 'assigned', 'ready_for_departure', 'in_transit', 'arrived', 'warehouse', 'delivered',
 ]
 
 export function GoodsDetail() {
   const { id } = useParams<{ id: string }>()
-  const { t, language, goods, agents } = useAppStore()
+  const { t, language, goods, agents, updateGoodsStatus, role, loadGoods } = useAppStore()
   const navigate = useNavigate()
   const [showReceipt, setShowReceipt] = useState(false)
   const [receiptType, setReceiptType] = useState<TemplateType>('reception')
+  const [qrModal, setQrModal] = useState<{ token: string } | null>(null)
+  const [allowedActions, setAllowedActions] = useState<{ status: string; actionKey: string }[]>([])
+  const [statusConsistent, setStatusConsistent] = useState(true)
+  const [statusBusy, setStatusBusy] = useState(false)
 
   const item = goods.find(g => g.id === id)
+
+  useEffect(() => {
+    if (!id) return
+    goodsService.getAllowedStatuses(id).then((res) => {
+      setAllowedActions(res.allowedActions || [])
+      setStatusConsistent(res.statusConsistent !== false)
+    }).catch(() => setAllowedActions([]))
+  }, [id, item?.status])
+
   if (!item) {
     return (
       <div className="p-6 text-center">
@@ -35,10 +53,15 @@ export function GoodsDetail() {
   const timelineSteps = STATUS_ORDER.map((s, i) => ({
     status: s,
     label: t(`goods.statuses.${s}`),
-    completed: i < currentIdx,
+    completed: currentIdx >= 0 && i < currentIdx,
     active: i === currentIdx,
-    delayed: item.status === 'delayed' && i === currentIdx,
   }))
+
+  const actionLabel = (action: { status: string; actionKey: string }) => {
+    const key = `goods.qrActions.${action.actionKey}`
+    const translated = t(key)
+    return translated === key ? t(`goods.statuses.${action.status}`) : translated
+  }
 
   const InfoRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div className="flex items-start gap-3 py-2.5 border-b border-gray-100 dark:border-gray-700 last:border-0">
@@ -49,7 +72,6 @@ export function GoodsDetail() {
 
   return (
     <div className="p-4 lg:p-6 space-y-5">
-      {/* Back + Header */}
       <div className="flex items-center gap-3">
         <button onClick={() => navigate('/goods')} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500">
           <ArrowLeft className="w-4 h-4" />
@@ -62,7 +84,23 @@ export function GoodsDetail() {
           </div>
           <p className="text-sm text-blue-600 dark:text-blue-400 font-mono mt-0.5">{item.trackingNumber}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {isOrgAdmin(role) && (
+            <button
+              onClick={async () => {
+                try {
+                  const info = await trackingService.generateQr(item.id)
+                  setQrModal({ token: info.token })
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : t('common.error'))
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded-lg text-sm font-medium transition-colors"
+            >
+              <QrCode className="w-4 h-4" />
+              {t('goods.generateQr')}
+            </button>
+          )}
           <button
             onClick={() => { setReceiptType('reception'); setShowReceipt(true) }}
             className="flex items-center gap-1.5 px-3 py-2 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-lg text-sm font-medium transition-colors"
@@ -81,9 +119,7 @@ export function GoodsDetail() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Main Details */}
         <div className="lg:col-span-2 space-y-5">
-          {/* Info Card */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700">
             <h2 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
               <FileText className="w-4 h-4 text-blue-500" />
@@ -92,8 +128,23 @@ export function GoodsDetail() {
             <InfoRow label={t('goods.description')} value={item.description} />
             <InfoRow label={t('goods.category')} value={t(`goods.categories.${item.category}`)} />
             <InfoRow label={t('goods.quantity')} value={`${item.quantity} ${t('goods.pieces')}`} />
-            {item.weight && <InfoRow label={t('goods.weight')} value={`${item.weight} كجم`} />}
-            {item.value && <InfoRow label={t('goods.value')} value={`${item.value.toLocaleString()} ${language === 'ar' ? 'دج' : 'DZD'}`} />}
+            {item.weight != null && <InfoRow label={t('goods.weight')} value={`${item.weight}`} />}
+            {item.value != null && <InfoRow label={t('goods.value')} value={`${item.value.toLocaleString()} ${item.valueCurrency || 'USD'}`} />}
+            {item.hsCode && <InfoRow label={t('goods.hsCode')} value={item.hsCode} />}
+            {item.incoterm && <InfoRow label={t('goods.incoterm')} value={item.incoterm} />}
+            {(item.freightCost != null || item.insuranceCost != null || item.dutyAmount != null) && (
+              <>
+                {item.freightCost != null && <InfoRow label={t('goods.freightCost')} value={String(item.freightCost)} />}
+                {item.insuranceCost != null && <InfoRow label={t('goods.insuranceCost')} value={String(item.insuranceCost)} />}
+                {item.dutyAmount != null && <InfoRow label={t('goods.dutyAmount')} value={String(item.dutyAmount)} />}
+              </>
+            )}
+            {item.landedCost != null && (
+              <InfoRow label={t('goods.landedCost')} value={`${Number(item.landedCost).toLocaleString()} ${item.valueCurrency || 'USD'}`} />
+            )}
+            {item.customsStatus && (
+              <InfoRow label={t('goods.customsStatus')} value={t(`goods.customsStatuses.${item.customsStatus}`)} />
+            )}
             {item.transportType && <InfoRow label={t('goods.transportType')} value={t(`goods.transportTypes.${item.transportType}`)} />}
             <InfoRow label={t('goods.departureDate')} value={formatDate(item.departureDate, language)} />
             <InfoRow label={t('goods.expectedArrival')} value={formatDate(item.expectedArrivalDate, language)} />
@@ -106,7 +157,90 @@ export function GoodsDetail() {
             )}
           </div>
 
-          {/* Timeline */}
+          {isOrgAdmin(role) && item.customsStatus !== 'cleared' && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700">
+              <h2 className="font-semibold text-gray-900 dark:text-white mb-3">{t('goods.customsStatus')}</h2>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  item.customsStatus === 'not_started' ? ['pending']
+                    : item.customsStatus === 'pending' ? ['cleared', 'held']
+                      : item.customsStatus === 'held' ? ['pending', 'cleared']
+                        : []
+                ).map((next) => (
+                  <button
+                    key={next}
+                    type="button"
+                    disabled={statusBusy}
+                    onClick={async () => {
+                      setStatusBusy(true)
+                      try {
+                        const result = await goodsService.updateCustomsStatus(item.id, next)
+                        if (!result.success) {
+                          toast.error(result.error || t('common.error'))
+                          return
+                        }
+                        toast.success(t('common.success'))
+                        await loadGoods()
+                      } finally {
+                        setStatusBusy(false)
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-sm font-medium bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                  >
+                    {t(`goods.customsStatuses.${next}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700">
+            <h2 className="font-semibold text-gray-900 dark:text-white mb-3">{t('goods.advanceStatus')}</h2>
+            {!statusConsistent && (
+              <p className="mb-3 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
+                {t('goods.statusInconsistent')}
+              </p>
+            )}
+            {item.status === 'delayed' && (
+              <p className="mb-2 text-sm text-amber-600 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                {t('goods.statuses.delayed')}
+              </p>
+            )}
+            {allowedActions.length === 0 ? (
+              <p className="text-sm text-gray-400">{t('goods.noAllowedTransitions')}</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {allowedActions.map((action) => (
+                  <button
+                    key={action.status}
+                    type="button"
+                    disabled={statusBusy}
+                    onClick={async () => {
+                      setStatusBusy(true)
+                      try {
+                        const result = await updateGoodsStatus(item.id, action.status as GoodsStatus)
+                        if (!result.success) {
+                          toast.error(result.error || t('common.error'))
+                          return
+                        }
+                        toast.success(t('common.success'))
+                        const res = await goodsService.getAllowedStatuses(item.id)
+                        setAllowedActions(res.allowedActions || [])
+                        setStatusConsistent(res.statusConsistent !== false)
+                      } finally {
+                        setStatusBusy(false)
+                      }
+                    }}
+                    className="px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                  >
+                    {actionLabel(action)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700">
             <h2 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <Clock className="w-4 h-4 text-blue-500" />
@@ -124,14 +258,11 @@ export function GoodsDetail() {
                   {timelineSteps.map((step) => (
                     <div key={step.status} className="flex items-center gap-3 relative">
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 relative z-10 ${
-                        step.delayed ? 'bg-red-500' :
                         step.active ? 'bg-blue-500' :
                         step.completed ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-600'
                       }`}>
                         {step.completed ? (
                           <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                        ) : step.delayed ? (
-                          <AlertTriangle className="w-3.5 h-3.5 text-white" />
                         ) : (
                           <div className={`w-2 h-2 rounded-full ${step.active ? 'bg-white' : 'bg-gray-400'}`} />
                         )}
@@ -150,7 +281,6 @@ export function GoodsDetail() {
           </div>
         </div>
 
-        {/* Agent Card */}
         <div className="space-y-5">
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700">
             <h2 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
@@ -160,7 +290,7 @@ export function GoodsDetail() {
             {agent ? (
               <div>
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-lg">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white font-bold text-lg">
                     {agent.name.charAt(0)}
                   </div>
                   <div>
@@ -201,30 +331,6 @@ export function GoodsDetail() {
               </div>
             )}
           </div>
-
-          {/* Dates Summary */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700">
-            <h2 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-blue-500" />
-              {language === 'ar' ? 'المواعيد' : 'Dates'}
-            </h2>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center p-2.5 rounded-lg bg-gray-50 dark:bg-gray-700">
-                <span className="text-xs text-gray-500">{t('goods.departureDate')}</span>
-                <span className="text-xs font-medium text-gray-900 dark:text-white">{formatDate(item.departureDate, language)}</span>
-              </div>
-              <div className="flex justify-between items-center p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20">
-                <span className="text-xs text-gray-500">{t('goods.expectedArrival')}</span>
-                <span className="text-xs font-medium text-amber-700 dark:text-amber-400">{formatDate(item.expectedArrivalDate, language)}</span>
-              </div>
-              {item.arrivalDate && (
-                <div className="flex justify-between items-center p-2.5 rounded-lg bg-green-50 dark:bg-green-900/20">
-                  <span className="text-xs text-gray-500">{t('goods.arrivalDate')}</span>
-                  <span className="text-xs font-medium text-green-700 dark:text-green-400">{formatDate(item.arrivalDate, language)}</span>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -234,6 +340,14 @@ export function GoodsDetail() {
           agent={agent}
           defaultType={receiptType}
           onClose={() => setShowReceipt(false)}
+        />
+      )}
+      {qrModal && (
+        <GoodsQrModal
+          token={qrModal.token}
+          trackingNumber={item.trackingNumber}
+          description={item.description}
+          onClose={() => setQrModal(null)}
         />
       )}
     </div>

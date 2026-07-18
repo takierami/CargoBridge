@@ -185,7 +185,7 @@ function StatCard({ icon: Icon, label, value, color, sub, onClick }: {
 }
 
 export function Dashboard() {
-  const { t, language, goods, agents } = useAppStore()
+  const { t, language, goods, agents, suppliers, purchaseOrders, supplierPayments, supplierTasks, supplierRatings } = useAppStore()
   const navigate = useNavigate()
 
   const stats = useMemo(() => ({
@@ -249,7 +249,10 @@ export function Dashboard() {
     ? Math.round((stats.delivered / goods.length) * 100)
     : 0
 
-  const supplierStats = useMemo(() => getDashboardStats(), [goods, agents])
+  const supplierStats = useMemo(
+    () => getDashboardStats({ suppliers, purchaseOrders, supplierPayments, supplierRatings, supplierTasks }),
+    [suppliers, purchaseOrders, supplierPayments, supplierRatings, supplierTasks],
+  )
 
   return (
     <div className="p-4 lg:p-6 space-y-6">

@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router'
 import { Sun, Moon, Globe, User, Bell, Database, Building2, Check, AlertTriangle, FileText, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
+import { useAuthStore } from '../../../store/authStore'
 import { cn } from '../../utils/cn'
-import type { Language, Theme, UserRole } from '../../../types'
+import type { Language, Theme } from '../../../types'
 
 function SettingSection({ title, icon: Icon, children }: {
   title: string; icon: React.ElementType; children: React.ReactNode
@@ -59,28 +60,38 @@ export function Settings() {
   const [notifEnabled, setNotifEnabled] = useState(true)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
 
-  const handleSaveCompany = () => {
-    setCompanyName(localCompanyName)
-    setCompanyNameFr(localCompanyNameFr)
-    toast.success(t('settings.saved'))
+  const handleSaveCompany = async () => {
+    try {
+      await useAuthStore.getState().updateProfile({
+        companyName: localCompanyName,
+        companyNameFr: localCompanyNameFr,
+      })
+      setCompanyName(localCompanyName)
+      setCompanyNameFr(localCompanyNameFr)
+      toast.success(t('settings.saved'))
+    } catch {
+      toast.error(t('common.error'))
+    }
   }
 
-  const handleResetData = () => {
-    resetData()
+  const handleResetData = async () => {
+    await resetData()
     setShowResetConfirm(false)
     toast.success(language === 'ar' ? 'تم إعادة تعيين البيانات' : 'Données réinitialisées')
   }
 
-  const OptionCard = ({ value, current, label, icon: Icon, onClick, color }: {
-    value: string; current: string; label: string; icon?: React.ElementType; onClick: () => void; color?: string
+  const OptionCard = ({ value, current, label, icon: Icon, onClick, color, disabled = false }: {
+    value: string; current: string; label: string; icon?: React.ElementType; onClick: () => void; color?: string; disabled?: boolean
   }) => (
     <button
+      disabled={disabled}
       onClick={onClick}
       className={cn(
         'flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-start w-full',
         current === value
           ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-          : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+          : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500',
+        disabled && 'cursor-not-allowed opacity-75 hover:border-gray-200 dark:hover:border-gray-600'
       )}
     >
       {Icon && (
@@ -140,20 +151,22 @@ export function Settings() {
               value="china_admin"
               current={role}
               label={t('settings.roles.china_admin')}
-              onClick={() => setRole('china_admin')}
+              onClick={() => undefined}
               color="bg-red-100 dark:bg-red-900/30 text-red-600"
+              disabled
             />
             <OptionCard
               value="algeria_admin"
               current={role}
               label={t('settings.roles.algeria_admin')}
-              onClick={() => setRole('algeria_admin')}
+              onClick={() => undefined}
               color="bg-green-100 dark:bg-green-900/30 text-green-600"
+              disabled
             />
           </div>
           <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" />
-            {language === 'ar' ? 'تغيير الدور سيؤثر على الصلاحيات المتاحة' : 'Changer de rôle affecte les permissions disponibles'}
+            {language === 'ar' ? 'يتم تعيين الدور من طرف مسؤول النظام' : 'Le rôle est attribué par un administrateur système'}
           </p>
         </div>
       </SettingSection>

@@ -1,52 +1,28 @@
 import type { SupplierDocumentTemplate } from '../types'
-
-const KEY = 'cargobridge_supplier_templates'
+import { api } from '../lib/apiClient'
 
 export const supplierTemplateService = {
-  getAll(): SupplierDocumentTemplate[] {
-    const stored = localStorage.getItem(KEY)
-    if (!stored) return []
+  async getAll(): Promise<SupplierDocumentTemplate[]> {
+    return api.getList<SupplierDocumentTemplate>('/supplier-templates/')
+  },
+
+  async create(data: Omit<SupplierDocumentTemplate, 'id' | 'createdAt'>): Promise<SupplierDocumentTemplate> {
+    return api.post<SupplierDocumentTemplate>('/supplier-templates/', data)
+  },
+
+  async update(id: string, data: Partial<SupplierDocumentTemplate>): Promise<SupplierDocumentTemplate | null> {
     try {
-      return JSON.parse(stored) as SupplierDocumentTemplate[]
+      return await api.patch<SupplierDocumentTemplate>(`/supplier-templates/${id}/`, data)
     } catch {
-      return []
+      return null
     }
   },
 
-  getById(id: string): SupplierDocumentTemplate | undefined {
-    return this.getAll().find(template => template.id === id)
+  async delete(id: string): Promise<void> {
+    await api.delete(`/supplier-templates/${id}/`)
   },
 
-  create(data: Omit<SupplierDocumentTemplate, 'id' | 'createdAt'>): SupplierDocumentTemplate {
-    const all = this.getAll()
-    const template: SupplierDocumentTemplate = {
-      ...data,
-      id: `supplier-template-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      createdAt: new Date().toISOString(),
-    }
-    all.push(template)
-    localStorage.setItem(KEY, JSON.stringify(all))
-    return template
-  },
-
-  update(id: string, data: Partial<SupplierDocumentTemplate>): SupplierDocumentTemplate | null {
-    const all = this.getAll()
-    const index = all.findIndex(template => template.id === id)
-    if (index === -1) return null
-    all[index] = { ...all[index], ...data }
-    localStorage.setItem(KEY, JSON.stringify(all))
-    return all[index]
-  },
-
-  delete(id: string): boolean {
-    const all = this.getAll()
-    const filtered = all.filter(template => template.id !== id)
-    if (filtered.length === all.length) return false
-    localStorage.setItem(KEY, JSON.stringify(filtered))
-    return true
-  },
-
-  reset(): void {
-    localStorage.setItem(KEY, JSON.stringify([]))
+  async reset(): Promise<void> {
+    await api.post('/reset/')
   },
 }

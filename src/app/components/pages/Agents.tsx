@@ -20,9 +20,6 @@ function AgentForm({ initial, onSave, onCancel, t }: {
     passport: initial?.passport || '',
     country: initial?.country || 'الجزائر',
     status: initial?.status || 'active',
-    reliabilityScore: initial?.reliabilityScore || 80,
-    totalDeliveries: initial?.totalDeliveries || 0,
-    delayedDeliveries: initial?.delayedDeliveries || 0,
     notes: initial?.notes || '',
   })
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
@@ -52,12 +49,12 @@ function AgentForm({ initial, onSave, onCancel, t }: {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agents.phone')}</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agents.phone')} *</label>
               <input value={form.phone} onChange={e => set('phone', e.target.value)} dir="ltr"
                 className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agents.passport')}</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agents.passport')} *</label>
               <input value={form.passport} onChange={e => set('passport', e.target.value)} dir="ltr"
                 className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
@@ -77,32 +74,24 @@ function AgentForm({ initial, onSave, onCancel, t }: {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t('agents.reliabilityScore')}: {form.reliabilityScore}%
-            </label>
-            <input type="range" min="0" max="100" value={form.reliabilityScore} onChange={e => set('reliabilityScore', Number(e.target.value))}
-              className="w-full accent-blue-600" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agents.totalDeliveries')}</label>
-              <input type="number" min="0" value={form.totalDeliveries} onChange={e => set('totalDeliveries', Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agents.delayedDeliveries')}</label>
-              <input type="number" min="0" value={form.delayedDeliveries} onChange={e => set('delayedDeliveries', Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
-            </div>
-          </div>
-          <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common.notes')}</label>
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
               className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 resize-none" />
           </div>
         </div>
         <div className="flex gap-3 p-5 border-t border-gray-200 dark:border-gray-700">
-          <button onClick={() => { if (!form.name.trim()) return; onSave(form) }}
+          <button onClick={() => {
+            if (!form.name.trim() || !form.phone.trim() || !form.passport.trim()) return
+            onSave({
+              ...form,
+              name: form.name.trim(),
+              nameFr: form.nameFr.trim(),
+              phone: form.phone.trim(),
+              passport: form.passport.trim(),
+              country: form.country.trim(),
+              notes: form.notes.trim(),
+            })
+          }}
             className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
             {t('common.save')}
           </button>
@@ -124,32 +113,41 @@ export function Agents() {
   const [showForm, setShowForm] = useState(false)
   const [editItem, setEditItem] = useState<Agent | null>(null)
 
-  const filtered = useMemo(() =>
-    agents.filter(a => {
-      const matchSearch = !search || a.name.toLowerCase().includes(search.toLowerCase())
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return agents.filter(a => {
+      const matchSearch = !q || [a.name, a.nameFr, a.phone, a.passport]
+        .some(v => (v || '').toLowerCase().includes(q))
       const matchStatus = statusFilter === 'all' || a.status === statusFilter
       return matchSearch && matchStatus
-    }),
-  [agents, search, statusFilter])
+    })
+  }, [agents, search, statusFilter])
 
   const getAgentGoodsCount = (agentId: string) =>
     goods.filter(g => g.agentId === agentId).length
 
-  const handleSave = (data: any) => {
-    if (editItem) {
-      updateAgent(editItem.id, data)
-    } else {
-      addAgent(data)
+  const handleSave = async (data: any) => {
+    try {
+      if (editItem) {
+        await updateAgent(editItem.id, data)
+      } else {
+        await addAgent(data)
+      }
+      toast.success(t('common.success'))
+      setShowForm(false)
+      setEditItem(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('common.error'))
     }
-    toast.success(t('common.success'))
-    setShowForm(false)
-    setEditItem(null)
   }
 
-  const handleDelete = (id: string) => {
-    if (confirm(t('common.confirm'))) {
-      deleteAgent(id)
+  const handleDelete = async (id: string) => {
+    if (!confirm(t('common.confirm'))) return
+    try {
+      await deleteAgent(id)
       toast.success(t('common.success'))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('common.error'))
     }
   }
 

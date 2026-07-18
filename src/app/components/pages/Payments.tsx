@@ -5,8 +5,15 @@ import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
 import { cn } from '../../utils/cn'
 import type { SupplierPayment, PaymentStatus, PaymentMethod } from '../../../types'
+import { isOrgAdmin } from '../../../lib/roles'
 import { ReceiptPrintModal } from '../ReceiptPrintModal'
 import type { PaymentReceiptData } from '../ReceiptPrintModal'
+import {
+  DEFAULT_TRANSACTION_CURRENCY,
+  currenciesForSelect,
+  currencyOptionLabel,
+  currencySymbol,
+} from '../../../lib/currencies'
 
 const PAYMENT_METHODS: PaymentMethod[] = ['bank_transfer', 'cash', 'wise', 'western_union', 'paypal', 'other']
 const PAYMENT_STATUSES: PaymentStatus[] = ['pending', 'partially_paid', 'fully_paid', 'overdue']
@@ -23,53 +30,150 @@ interface PaymentFormData {
   notes: string
 }
 
-function PaymentForm({ initial, onSave, onCancel, t, suppliers, purchaseOrders, getPOBalance }: {
+function deriveStatusFromAmounts(amount: number, amountPaid: number): PaymentStatus {
+  if (amount > 0 && amountPaid >= amount) return 'fully_paid'
+  if (amountPaid > 0) return 'partially_paid'
+  return 'pending'
+}
+
+type PaymentSupplierOption = { id: string; name: string; preferredCurrency?: string }
+type PaymentPOOption = { id: string; poNumber: string; supplierId: string; totalAmount: number; status: string; currency: string }
+
+function PaymentForm({ initial, onSave, onCancel, t, language, suppliers, purchaseOrders, getPOBalance }: {
   initial?: Partial<SupplierPayment>
-  onSave: (data: PaymentFormData) => void
+  onSave: (data: PaymentFormData, options?: { addAnother?: boolean }) => void | Promise<void>
   onCancel: () => void
   t: ReturnType<typeof useAppStore>['t']
-  suppliers: { id: string; name: string }[]
-  purchaseOrders: { id: string; poNumber: string; supplierId: string; totalAmount: number }[]
-  getPOBalance: (purchaseOrderId: string) => { total: number; paid: number; remaining: number }
+  language: 'ar' | 'fr'
+  suppliers: PaymentSupplierOption[]
+  purchaseOrders: PaymentPOOption[]
+  getPOBalance: (purchaseOrderId: string) => Promise<{ total: number; paid: number; remaining: number }>
 }) {
+  const defaultCurrency = () => {
+    const supplier = suppliers.find(s => s.id === (initial?.supplierId || ''))
+    return initial?.currency || supplier?.preferredCurrency || DEFAULT_TRANSACTION_CURRENCY
+  }
+
   const [form, setForm] = useState<PaymentFormData>({
     supplierId: initial?.supplierId || '',
     purchaseOrderId: initial?.purchaseOrderId || '',
     amount: initial?.amount || 0,
     amountPaid: initial?.amountPaid || 0,
-    currency: initial?.currency || 'USD',
+    currency: defaultCurrency(),
     paymentMethod: initial?.paymentMethod || 'bank_transfer',
     paymentDate: initial?.paymentDate || new Date().toISOString().split('T')[0],
     status: initial?.status || 'pending',
     notes: initial?.notes || '',
   })
+  const [saving, setSaving] = useState(false)
 
   const set = (k: keyof PaymentFormData, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
-  const supplierPOs = useMemo(() => purchaseOrders.filter(po => po.supplierId === form.supplierId && !['draft', 'cancelled'].includes(po.status)), [purchaseOrders, form.supplierId])
+  const supplierPOs = useMemo(
+    () => purchaseOrders.filter(po => po.supplierId === form.supplierId && !['draft', 'cancelled'].includes(po.status)),
+    [purchaseOrders, form.supplierId]
+  )
 
-  const poBalance = useMemo(() => {
-    if (!form.purchaseOrderId) return undefined
-    return getPOBalance(form.purchaseOrderId)
+  const [poBalance, setPoBalance] = useState<{ total: number; paid: number; remaining: number } | undefined>()
+
+  const applyPOSelection = (poId: string) => {
+    if (!poId) {
+      setForm(f => ({ ...f, purchaseOrderId: '' }))
+      setPoBalance(undefined)
+      return
+    }
+    const po = purchaseOrders.find(p => p.id === poId)
+    getPOBalance(poId).then((balance) => {
+      setForm(f => ({
+        ...f,
+        purchaseOrderId: poId,
+        amount: balance.remaining,
+        amountPaid: balance.remaining,
+        currency: po?.currency || f.currency,
+        status: deriveStatusFromAmounts(balance.remaining, balance.remaining),
+      }))
+    })
+  }
+
+  useEffect(() => {
+    if (!form.purchaseOrderId) {
+      setPoBalance(undefined)
+      return
+    }
+    getPOBalance(form.purchaseOrderId).then(setPoBalance)
   }, [form.purchaseOrderId, getPOBalance])
 
   useEffect(() => {
-    if (supplierPOs.length > 0 && !form.purchaseOrderId) {
-      const firstPoId = supplierPOs[0].id
-      const balance = getPOBalance(firstPoId)
-      setForm(f => ({
-        ...f,
-        purchaseOrderId: firstPoId,
-        amount: balance.remaining,
-        amountPaid: balance.remaining,
-        status: balance.remaining > 0 ? 'fully_paid' : 'pending'
-      }))
-    }
-  }, [form.supplierId, supplierPOs, getPOBalance])
+    if (initial?.id || !initial?.supplierId || initial.purchaseOrderId) return
+    const pos = purchaseOrders.filter(po => po.supplierId === initial.supplierId && !['draft', 'cancelled'].includes(po.status))
+    if (pos.length > 0) applyPOSelection(pos[0].id)
+  }, []) // mount only: prefill first PO when opened with supplierId query
 
-  const handleSave = () => {
-    if (!form.supplierId || form.amount <= 0) return
-    onSave(form)
+  const selectSupplier = (supplierId: string) => {
+    const supplier = suppliers.find(s => s.id === supplierId)
+    const pos = purchaseOrders.filter(po => po.supplierId === supplierId && !['draft', 'cancelled'].includes(po.status))
+    setForm(f => ({
+      ...f,
+      supplierId,
+      purchaseOrderId: '',
+      amount: 0,
+      amountPaid: 0,
+      status: 'pending',
+      currency: supplier?.preferredCurrency || f.currency,
+    }))
+    setPoBalance(undefined)
+    if (!initial?.id && pos.length > 0) {
+      applyPOSelection(pos[0].id)
+    }
+  }
+
+  const updateAmountFields = (amount: number, amountPaid: number) => {
+    setForm(f => ({
+      ...f,
+      amount,
+      amountPaid,
+      status: deriveStatusFromAmounts(amount, amountPaid),
+    }))
+  }
+
+  const resetForAnother = () => {
+    setForm(f => ({
+      ...f,
+      purchaseOrderId: '',
+      amount: 0,
+      amountPaid: 0,
+      paymentDate: new Date().toISOString().split('T')[0],
+      status: 'pending',
+      notes: '',
+      paymentMethod: 'bank_transfer',
+    }))
+    setPoBalance(undefined)
+  }
+
+  const handleSave = async (addAnother = false) => {
+    if (!form.supplierId) {
+      toast.error(t('suppliers.selectSupplier'))
+      return
+    }
+    if (!(form.amount > 0)) {
+      toast.error(t('suppliers.amountRequired'))
+      return
+    }
+    // Blank/zero paid on create means "pay in full" so كشف حساب updates immediately.
+    const amountPaid = form.amountPaid > 0 ? form.amountPaid : form.amount
+    const payload = {
+      ...form,
+      amountPaid,
+      purchaseOrderId: form.purchaseOrderId || undefined,
+      status: deriveStatusFromAmounts(form.amount, amountPaid),
+    } as PaymentFormData
+    setSaving(true)
+    try {
+      await onSave(payload, { addAnother })
+      if (addAnother) resetForAnother()
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -82,35 +186,31 @@ function PaymentForm({ initial, onSave, onCancel, t, suppliers, purchaseOrders, 
         <div className="p-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.supplierName')} *</label>
-            <select value={form.supplierId} onChange={e => set('supplierId', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
+            <select
+              value={form.supplierId}
+              onChange={e => selectSupplier(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+            >
               <option value="">{t('suppliers.selectSupplier')}</option>
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
 
-          {form.supplierId && supplierPOs.length > 0 && (
+          {form.supplierId && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.linkedPO')}</label>
               <select
                 value={form.purchaseOrderId}
-                onChange={e => {
-                  const poId = e.target.value
-                  const balance = poId ? getPOBalance(poId) : null
-                  setForm(f => ({
-                    ...f,
-                    purchaseOrderId: poId,
-                    amount: balance ? balance.remaining : 0,
-                    amountPaid: balance ? balance.remaining : 0,
-                    status: balance && balance.remaining > 0 ? 'fully_paid' : 'pending'
-                  }))
-                }}
+                onChange={e => applyPOSelection(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
               >
                 <option value="">{t('suppliers.noLinkedPO')}</option>
-                {supplierPOs.map(po => <option key={po.id} value={po.id}>{po.poNumber} ({po.totalAmount})</option>)}
+                {supplierPOs.map(po => <option key={po.id} value={po.id}>{po.poNumber} ({po.totalAmount} {po.currency})</option>)}
               </select>
-              {poBalance && poBalance.remaining > 0 && (
-                <p className="text-xs text-blue-500 mt-1">{t('suppliers.remainingBalance')}: {poBalance.remaining} {form.currency}</p>
+              {poBalance && (
+                <p className="text-xs text-blue-500 mt-1">
+                  {t('suppliers.remainingBalance')}: {poBalance.remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {form.currency}
+                </p>
               )}
             </div>
           )}
@@ -118,21 +218,29 @@ function PaymentForm({ initial, onSave, onCancel, t, suppliers, purchaseOrders, 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.amount')} *</label>
-              <input type="number" min="0" step="0.01" value={form.amount}
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={form.amount || ''}
                 onChange={e => {
                   const val = Number(e.target.value)
-                  setForm(f => ({
-                    ...f,
-                    amount: val,
-                    amountPaid: f.amountPaid === f.amount || f.amountPaid === 0 ? val : f.amountPaid,
-                    status: f.status === 'pending' || f.status === 'fully_paid' ? 'fully_paid' : f.status
-                  }))
+                  const paid = form.amountPaid === form.amount || form.amountPaid === 0 ? val : form.amountPaid
+                  updateAmountFields(val, paid)
                 }}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.amountPaid')}</label>
-              <input type="number" min="0" step="0.01" value={form.amountPaid} onChange={e => set('amountPaid', Number(e.target.value))} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.amountPaid || ''}
+                onChange={e => updateAmountFields(form.amount, Number(e.target.value))}
+                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+              />
             </div>
           </div>
 
@@ -140,10 +248,11 @@ function PaymentForm({ initial, onSave, onCancel, t, suppliers, purchaseOrders, 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.selectCurrency')}</label>
               <select value={form.currency} onChange={e => set('currency', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
-                <option value="USD">USD</option>
-                <option value="CNY">CNY</option>
-                <option value="EUR">EUR</option>
-                <option value="DZD">DZD</option>
+                {currenciesForSelect(form.currency).map(c => (
+                  <option key={c.code} value={c.code}>
+                    {currencyOptionLabel(c.code, language)}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -172,9 +281,24 @@ function PaymentForm({ initial, onSave, onCancel, t, suppliers, purchaseOrders, 
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 resize-none" />
           </div>
         </div>
-        <div className="flex gap-3 p-5 border-t border-gray-200 dark:border-gray-700">
-          <button onClick={handleSave} className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">{t('common.save')}</button>
-          <button onClick={onCancel} className="flex-1 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors">{t('common.cancel')}</button>
+        <div className="flex flex-wrap gap-3 p-5 border-t border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => handleSave(false)}
+            disabled={saving}
+            className="flex-1 min-w-[120px] py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {t('common.save')}
+          </button>
+          {!initial?.id && (
+            <button
+              onClick={() => handleSave(true)}
+              disabled={saving}
+              className="flex-1 min-w-[120px] py-2 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {t('suppliers.saveAndAddAnother')}
+            </button>
+          )}
+          <button onClick={onCancel} className="flex-1 min-w-[100px] py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors">{t('common.cancel')}</button>
         </div>
       </div>
     </div>
@@ -182,7 +306,7 @@ function PaymentForm({ initial, onSave, onCancel, t, suppliers, purchaseOrders, 
 }
 
 export function Payments() {
-  const { t, language, supplierPayments, suppliers, purchaseOrders, addSupplierPayment, updateSupplierPayment, markPaymentAsFullyPaid, deleteSupplierPayment, getPOBalance } = useAppStore()
+  const { t, language, role, supplierPayments, suppliers, purchaseOrders, addSupplierPayment, updateSupplierPayment, markPaymentAsFullyPaid, deleteSupplierPayment, getPOBalance } = useAppStore()
   const navigate = useNavigate()
   const { id } = useParams()
   const [searchParams] = useSearchParams()
@@ -249,19 +373,37 @@ export function Payments() {
   }
 
   const formatCurrency = (amount: number, currency: string) => {
-    const symbols: Record<string, string> = { USD: '$', CNY: '¥', EUR: '€', DZD: 'دج' }
-    return symbols[currency] + ' ' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return currencySymbol(currency) + ' ' + amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
 
-  const handleSave = (data: PaymentFormData) => {
+  const canManagePayments = isOrgAdmin(role)
+
+  const handleSave = async (data: PaymentFormData, options?: { addAnother?: boolean }) => {
     let savedPaymentNumber = editItem?.paymentNumber ?? ''
-    if (editItem?.id) {
-      updateSupplierPayment(editItem.id, data)
-    } else {
-      const saved = addSupplierPayment(data)
-      savedPaymentNumber = saved.paymentNumber
+    let receiptPaid = data.amountPaid
+    try {
+      if (editItem?.id) {
+        const updated = await updateSupplierPayment(editItem.id, data)
+        if (updated) {
+          receiptPaid = updated.amountPaid
+          savedPaymentNumber = updated.paymentNumber || savedPaymentNumber
+        }
+      } else {
+        const saved = await addSupplierPayment(data)
+        savedPaymentNumber = saved.paymentNumber
+        receiptPaid = saved.amountPaid
+      }
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : t('common.error'))
+      return
     }
     toast.success(t('common.success'))
+
+    if (options?.addAnother) {
+      setEditItem(supplierIdParam ? { supplierId: supplierIdParam } as SupplierPayment : { supplierId: data.supplierId } as SupplierPayment)
+      return
+    }
+
     setShowForm(false)
 
     // Build receipt data and show print modal
@@ -273,11 +415,11 @@ export function Payments() {
       supplierName: supplier?.name ?? data.supplierId,
       purchaseOrderNumber: po?.poNumber,
       amount: data.amount,
-      amountPaid: data.amountPaid,
+      amountPaid: receiptPaid,
       currency: data.currency,
       paymentMethod: data.paymentMethod,
       paymentDate: data.paymentDate,
-      status: data.status,
+      status: deriveStatusFromAmounts(data.amount, receiptPaid),
       notes: data.notes || undefined,
     })
   }
@@ -292,17 +434,23 @@ export function Payments() {
     }
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    if (!canManagePayments) return
     if (confirm(t('suppliers.confirmDelete'))) {
-      deleteSupplierPayment(id)
+      await deleteSupplierPayment(id)
       toast.success(t('common.success'))
     }
   }
 
-  const handleMarkAsPaid = (id: string, e: React.MouseEvent) => {
+  const handleMarkAsPaid = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    const result = markPaymentAsFullyPaid(id)
-    if (result) toast.success(t('suppliers.confirmFullPayment'))
+    if (!canManagePayments) return
+    try {
+      await markPaymentAsFullyPaid(id)
+      toast.success(t('suppliers.confirmFullPayment'))
+    } catch {
+      toast.error(t('common.error'))
+    }
   }
 
   const handleCloseForm = () => {
@@ -318,9 +466,11 @@ export function Payments() {
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('suppliers.payments')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} {t('common.records')}</p>
         </div>
-        <button onClick={() => navigate('/suppliers/payments/new')} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-          <Plus className="w-4 h-4" /> {t('suppliers.addPayment')}
-        </button>
+        {canManagePayments && (
+          <button onClick={() => navigate('/suppliers/payments/new')} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+            <Plus className="w-4 h-4" /> {t('suppliers.addPayment')}
+          </button>
+        )}
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 space-y-4">
@@ -378,17 +528,21 @@ export function Payments() {
                   <td className="px-5 py-4"><span className={cn('px-2.5 py-1 rounded-full text-xs font-medium', statusColor(p.status))}>{t('suppliers.paymentStatuses.' + p.status)}</span></td>
                   <td className="px-5 py-4 text-end">
                     <div className="flex items-center justify-end gap-1">
-                      {(p.status === 'pending' || p.status === 'partially_paid' || p.status === 'overdue') && (
+                      {canManagePayments && (p.status === 'pending' || p.status === 'partially_paid' || p.status === 'overdue') && (
                         <button onClick={(e) => handleMarkAsPaid(p.id, e)} className="p-1.5 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg" title={t('suppliers.markAsFullyPaid')}>
                           <CheckCircle className="w-3.5 h-3.5" />
                         </button>
                       )}
-                      <button onClick={() => navigate('/suppliers/payments/' + p.id)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {canManagePayments && (
+                        <>
+                          <button onClick={() => navigate('/suppliers/payments/' + p.id)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -404,8 +558,16 @@ export function Payments() {
           onSave={handleSave}
           onCancel={handleCloseForm}
           t={t}
-          suppliers={suppliers.map(s => ({ id: s.id, name: s.name }))}
-          purchaseOrders={purchaseOrders.map(po => ({ id: po.id, poNumber: po.poNumber, supplierId: po.supplierId, totalAmount: po.totalAmount }))}
+          language={language}
+          suppliers={suppliers.map(s => ({ id: s.id, name: s.name, preferredCurrency: s.preferredCurrency }))}
+          purchaseOrders={purchaseOrders.map(po => ({
+            id: po.id,
+            poNumber: po.poNumber,
+            supplierId: po.supplierId,
+            totalAmount: po.totalAmount,
+            status: po.status,
+            currency: po.currency,
+          }))}
           getPOBalance={getPOBalance}
         />
       )}

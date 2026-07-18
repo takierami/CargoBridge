@@ -35,7 +35,7 @@ function formatCurrency(n: number, currency = 'USD') {
 }
 
 export function Analytics() {
-  const { t, suppliers, supplierRatings, purchaseOrders, supplierPayments } = useAppStore()
+  const { t, suppliers, supplierRatings, purchaseOrders, supplierPayments, supplierTasks } = useAppStore()
 
   const twelveMonthsAgo = useMemo(() => {
     const d = new Date()
@@ -66,8 +66,8 @@ export function Analytics() {
   }, [suppliers, purchaseOrders, supplierRatings, twelveMonthsAgo])
 
   const analytics = useMemo(() => {
-    return computeAnalytics()
-  }, [suppliers, purchaseOrders, supplierPayments, supplierRatings])
+    return computeAnalytics({ suppliers, purchaseOrders, supplierPayments, supplierRatings, supplierTasks })
+  }, [suppliers, purchaseOrders, supplierPayments, supplierRatings, supplierTasks])
 
   return (
     <div className="p-4 lg:p-6 space-y-6">

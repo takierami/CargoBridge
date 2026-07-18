@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { X, Printer, FileDown, ChevronDown, Pencil, Check, RotateCcw } from 'lucide-react'
 import { useAppStore } from '../../../store/appStore'
-import { formatDate } from '../../../utils/dateUtils'
+import { formatDate, formatDateTime, formatDateTimeIsolated, ltrIsolate } from '../../../utils/dateUtils'
 import { cn } from '../../utils/cn'
 import type { Goods, Agent, DocumentTemplate, TemplateType } from '../../../types'
 
@@ -38,20 +38,12 @@ const STATUS_AR: Record<string, string> = {
   delayed: 'متأخر', cancelled: 'ملغي',
 }
 
-function formatDateTime(lang: 'ar' | 'fr'): string {
-  const now = new Date()
-  const locale = lang === 'ar' ? 'ar-DZ' : 'fr-FR'
-  const date = now.toLocaleDateString(locale)
-  const time = now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
-  return `${date} — ${time}`
-}
-
-
 function buildPrintHtml(
   content: string,
   title: string,
   companyName: string,
-  isRTL: boolean
+  isRTL: boolean,
+  footerDateTime: string,
 ): string {
   const dir = isRTL ? 'rtl' : 'ltr'
   const align = isRTL ? 'right' : 'left'
@@ -105,6 +97,11 @@ function buildPrintHtml(
       color: #9ca3af;
       text-align: center;
     }
+    .doc-footer-datetime {
+      direction: ltr;
+      unicode-bidi: isolate;
+      display: inline-block;
+    }
     p { margin: 3px 0; }
     @media print {
       body { padding: 0; }
@@ -119,7 +116,7 @@ function buildPrintHtml(
   </div>
   <div class="doc-body">${lines}</div>
   <div class="doc-footer">
-    CargoBridge &mdash; ${new Date().toLocaleDateString(isRTL ? 'ar-DZ' : 'fr-FR')} &mdash; ${new Date().toLocaleTimeString(isRTL ? 'ar-DZ' : 'fr-FR', { hour: '2-digit', minute: '2-digit' })}
+    CargoBridge &mdash; <span class="doc-footer-datetime">${footerDateTime}</span>
   </div>
 </body>
 </html>`
@@ -195,35 +192,39 @@ export function ReceiptModal({ goods, agent, defaultType = 'reception', onClose 
     (!goods.descriptionFr) || (goods.notes && !goods.notesFr) || (agent && !agent.nameFr)
   )
 
+  const effectiveCompany = isFr ? (companyNameFr || companyName) : companyName
+  const documentGeneratedAt = useMemo(() => new Date(), [activeTemplate?.id, selectedType, language, goods.id])
+  const footerDateTime = formatDateTime(language as 'ar' | 'fr', documentGeneratedAt)
+
   const processed = useMemo(() => {
     if (!activeTemplate) return ''
-    const effectiveCompany = isFr ? (companyNameFr || companyName) : companyName
 
     const lang = language as 'ar' | 'fr'
     const weightUnit = isFr ? 'kg' : 'كجم'
     const currency = isFr ? 'DZD' : 'دج'
     const categoryMap = isFr ? CATEGORY_FR : CATEGORY_AR
     const statusMap = isFr ? STATUS_FR : STATUS_AR
-    const now = new Date()
     const locale = isFr ? 'fr-FR' : 'ar-DZ'
+    // Isolate LTR-sensitive fields when embedding into Arabic templates
+    const isolate = (value: string) => (lang === 'ar' ? ltrIsolate(value) : value)
 
     const vars: Record<string, string> = {
-      trackingNumber: goods.trackingNumber,
+      trackingNumber: isolate(goods.trackingNumber),
       goodsDescription: isFr ? (goods.descriptionFr || MISSING_FR) : goods.description,
-      quantity: String(goods.quantity),
+      quantity: isolate(String(goods.quantity)),
       category: categoryMap[goods.category] ?? goods.category,
-      weight: goods.weight ? `${goods.weight} ${weightUnit}` : '—',
-      value: goods.value ? `${goods.value.toLocaleString(locale)} ${currency}` : '—',
+      weight: goods.weight ? isolate(`${goods.weight} ${weightUnit}`) : '—',
+      value: goods.value ? isolate(`${goods.value.toLocaleString(locale)} ${currency}`) : '—',
       agentName: isFr ? (agent?.nameFr || agent?.name || '—') : (agent?.name ?? '—'),
-      agentPhone: agent?.phone ?? '—',
-      passportNumber: agent?.passport ?? '—',
-      departureDate: formatDate(goods.departureDate, lang),
-      expectedArrivalDate: formatDate(goods.expectedArrivalDate, lang),
-      arrivalDate: formatDate(goods.arrivalDate, lang),
-      creationDate: formatDate(goods.createdAt, lang),
-      currentDate: now.toLocaleDateString(locale),
-      currentTime: now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }),
-      currentDateTime: formatDateTime(lang),
+      agentPhone: isolate(agent?.phone ?? '—'),
+      passportNumber: isolate(agent?.passport ?? '—'),
+      departureDate: isolate(formatDate(goods.departureDate, lang)),
+      expectedArrivalDate: isolate(formatDate(goods.expectedArrivalDate, lang)),
+      arrivalDate: isolate(formatDate(goods.arrivalDate, lang)),
+      creationDate: isolate(formatDate(goods.createdAt, lang)),
+      currentDate: isolate(documentGeneratedAt.toLocaleDateString(locale)),
+      currentTime: isolate(documentGeneratedAt.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })),
+      currentDateTime: formatDateTimeIsolated(lang, documentGeneratedAt),
       status: statusMap[goods.status] ?? goods.status,
       transportType: goods.transportType
         ? (isFr
@@ -234,7 +235,7 @@ export function ReceiptModal({ goods, agent, defaultType = 'reception', onClose 
       companyName: effectiveCompany,
     }
     return activeTemplate.content.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
-  }, [activeTemplate, goods, agent, companyName, companyNameFr, language, isFr])
+  }, [activeTemplate, goods, agent, effectiveCompany, language, isFr, documentGeneratedAt])
 
   const displayContent = editedContent ?? processed
 
@@ -243,7 +244,7 @@ export function ReceiptModal({ goods, agent, defaultType = 'reception', onClose 
     : t('receipts.deliveryReceipt')
 
   const handlePrint = () => {
-    const html = buildPrintHtml(displayContent, title, companyName, docIsRTL)
+    const html = buildPrintHtml(displayContent, title, effectiveCompany, docIsRTL, footerDateTime)
     const win = window.open('', '_blank', 'width=820,height=960')
     if (!win) return
     win.document.write(html)
@@ -252,7 +253,7 @@ export function ReceiptModal({ goods, agent, defaultType = 'reception', onClose 
   }
 
   const handleDownload = () => {
-    const html = buildPrintHtml(displayContent, title, companyName, docIsRTL)
+    const html = buildPrintHtml(displayContent, title, effectiveCompany, docIsRTL, footerDateTime)
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -293,7 +294,7 @@ export function ReceiptModal({ goods, agent, defaultType = 'reception', onClose 
         <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
           <div>
             <h2 className="font-bold text-gray-900 dark:text-white">{t('receipts.preview')}</h2>
-            <p className="text-xs text-gray-500 mt-0.5 font-mono">{goods.trackingNumber}</p>
+            <p className="text-xs text-gray-500 mt-0.5 font-mono" dir="ltr">{goods.trackingNumber}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500">
             <X className="w-5 h-5" />
@@ -426,7 +427,7 @@ export function ReceiptModal({ goods, agent, defaultType = 'reception', onClose 
                 {/* Document header — always centered, direction-neutral */}
                 <div className="text-center border-b-2 border-gray-800 mx-8 pt-8 pb-5 mb-0">
                   <h1 className="text-[17px] font-bold text-gray-900 tracking-wide">{title}</h1>
-                  <p className="text-[11px] text-gray-500 mt-1">{companyName}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{effectiveCompany}</p>
                 </div>
 
                 {/* Document body */}
@@ -448,9 +449,12 @@ export function ReceiptModal({ goods, agent, defaultType = 'reception', onClose 
                   </div>
                 )}
 
-                {/* Document footer */}
+                {/* Document footer — datetime LTR-isolated to prevent Arabic bi-di scramble */}
                 <div className="mx-8 mb-6 mt-2 pt-4 border-t border-gray-200 text-center text-[11px] text-gray-400">
-                  CargoBridge &mdash; {formatDateTime(language as 'ar' | 'fr')}
+                  CargoBridge —{' '}
+                  <span dir="ltr" style={{ unicodeBidi: 'isolate', display: 'inline-block' }}>
+                    {footerDateTime}
+                  </span>
                 </div>
               </div>
 

@@ -1,10 +1,14 @@
 import { useState } from 'react'
-import { Bell, Menu, Sun, Moon, Globe, ChevronDown, Check } from 'lucide-react'
+import { Bell, Menu, Sun, Moon, Globe, ChevronDown, Check, LogOut } from 'lucide-react'
+import { useNavigate } from 'react-router'
 import { useAppStore } from '../../../store/appStore'
+import { useAuthStore } from '../../../store/authStore'
 import { cn } from '../../utils/cn'
 import { formatDistanceToNow } from '../../../utils/dateUtils'
 
 export function Header() {
+  const navigate = useNavigate()
+  const logout = useAuthStore((s) => s.logout)
   const {
     t, language, theme, role, companyName,
     setLanguage, setTheme,
@@ -151,6 +155,18 @@ export function Header() {
             </div>
           )}
         </div>
+
+        {/* Logout */}
+        <button
+          onClick={async () => {
+            await logout()
+            navigate('/login')
+          }}
+          className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+          title={language === 'ar' ? 'تسجيل الخروج' : 'Déconnexion'}
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
 
         {/* Avatar */}
         <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
