@@ -18,7 +18,6 @@ import { Calculator } from './components/pages/Calculator'
 import { Settings } from './components/pages/Settings'
 import { TemplatesManager } from './components/pages/TemplatesManager'
 import { Tasks } from './components/pages/Tasks'
-import { TaskForm } from './components/pages/TaskForm'
 import { Performance } from './components/pages/Performance'
 import { Analytics } from './components/pages/Analytics'
 
@@ -53,8 +52,8 @@ export const router = createBrowserRouter([
           { path: 'suppliers/payments/:id', Component: Payments },
           { path: 'suppliers/:id/statement', Component: AccountStatement },
           { path: 'suppliers/tasks', Component: Tasks },
-          { path: 'suppliers/tasks/new', Component: TaskForm },
-          { path: 'suppliers/tasks/:id', Component: TaskForm },
+          { path: 'suppliers/tasks/new', Component: Tasks },
+          { path: 'suppliers/tasks/:id', Component: Tasks },
           { path: 'suppliers/analytics', Component: Analytics },
           { path: 'suppliers/:id/performance', Component: Performance },
           { path: 'agents', Component: Agents },

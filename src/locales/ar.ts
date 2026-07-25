@@ -32,6 +32,8 @@ export const ar = {
     required: 'مطلوب',
     optional: 'اختياري',
     records: 'سجل',
+    addNew: 'إضافة جديد',
+    clear: 'مسح',
   },
   nav: {
     dashboard: 'لوحة التحكم',

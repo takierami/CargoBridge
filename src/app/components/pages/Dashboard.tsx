@@ -384,9 +384,25 @@ export function Dashboard() {
               <ArrowUpRight className="w-4 h-4 text-gray-400" />
             </div>
             <div className="space-y-1">
-              {supplierStats.topSuppliersThisMonth.slice(0, 3).map((s, i) => (
-                <div key={s.supplierId} className="flex items-center justify-between text-xs">
-                  <span className="text-gray-700 dark:text-gray-300 truncate max-w-[100px]">{s.supplierName}</span>
+              {supplierStats.topSuppliersThisMonth.slice(0, 3).map((s) => (
+                <div
+                  key={s.supplierId}
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    navigate(`/suppliers/${s.supplierId}`)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      navigate(`/suppliers/${s.supplierId}`)
+                    }
+                  }}
+                  className="flex items-center justify-between text-xs rounded-md px-1 -mx-1 py-0.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                >
+                  <span className="text-gray-700 dark:text-gray-300 truncate max-w-[100px] hover:text-blue-600 dark:hover:text-blue-400">{s.supplierName}</span>
                   <span className="text-gray-500 font-mono">{s.spend.toLocaleString()}</span>
                 </div>
               ))}

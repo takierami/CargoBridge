@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router'
-import { ArrowLeft, Package, User, FileText, CheckCircle2, Clock, AlertTriangle, Receipt, QrCode } from 'lucide-react'
+import { ArrowLeft, Package, User, FileText, CheckCircle2, Clock, AlertTriangle, Receipt, QrCode, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
 import { StatusBadge, PriorityBadge } from '../ui/StatusBadge'
@@ -11,6 +11,7 @@ import { trackingService } from '../../../services/trackingService'
 import { goodsService } from '../../../services/goodsService'
 import type { GoodsStatus, TemplateType } from '../../../types'
 import { isOrgAdmin } from '../../../lib/roles'
+import { GoodsForm } from './Goods'
 
 const STATUS_ORDER: GoodsStatus[] = [
   'draft', 'assigned', 'ready_for_departure', 'in_transit', 'arrived', 'warehouse', 'delivered',
@@ -18,7 +19,7 @@ const STATUS_ORDER: GoodsStatus[] = [
 
 export function GoodsDetail() {
   const { id } = useParams<{ id: string }>()
-  const { t, language, goods, agents, updateGoodsStatus, role, loadGoods } = useAppStore()
+  const { t, language, goods, agents, updateGoods, updateGoodsStatus, role, loadGoods } = useAppStore()
   const navigate = useNavigate()
   const [showReceipt, setShowReceipt] = useState(false)
   const [receiptType, setReceiptType] = useState<TemplateType>('reception')
@@ -26,6 +27,7 @@ export function GoodsDetail() {
   const [allowedActions, setAllowedActions] = useState<{ status: string; actionKey: string }[]>([])
   const [statusConsistent, setStatusConsistent] = useState(true)
   const [statusBusy, setStatusBusy] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
 
   const item = goods.find(g => g.id === id)
 
@@ -85,6 +87,15 @@ export function GoodsDetail() {
           <p className="text-sm text-blue-600 dark:text-blue-400 font-mono mt-0.5">{item.trackingNumber}</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {isOrgAdmin(role) && (
+            <button
+              onClick={() => setShowEdit(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium transition-colors"
+            >
+              <Pencil className="w-4 h-4" />
+              {t('common.edit')}
+            </button>
+          )}
           {isOrgAdmin(role) && (
             <button
               onClick={async () => {
@@ -348,6 +359,36 @@ export function GoodsDetail() {
           trackingNumber={item.trackingNumber}
           description={item.description}
           onClose={() => setQrModal(null)}
+        />
+      )}
+      {showEdit && (
+        <GoodsForm
+          initial={item}
+          agents={agents}
+          t={t}
+          language={language}
+          role={role}
+          onCancel={() => setShowEdit(false)}
+          onSave={async (data) => {
+            try {
+              const { status: _status, ...rest } = data
+              await updateGoods(item.id, rest)
+              toast.success(t('common.success'))
+              setShowEdit(false)
+              await loadGoods()
+            } catch {
+              toast.error(t('common.error'))
+            }
+          }}
+          onStatusChange={async (newStatus) => {
+            const result = await updateGoodsStatus(item.id, newStatus)
+            if (!result.success) {
+              toast.error(result.error || t('common.error'))
+              throw new Error(result.error || 'status failed')
+            }
+            toast.success(t('common.success'))
+            await loadGoods()
+          }}
         />
       )}
     </div>

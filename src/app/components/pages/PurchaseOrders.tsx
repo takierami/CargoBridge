@@ -8,6 +8,9 @@ import type { PurchaseOrder, POStatus, Supplier, PurchaseOrderItem, SupplierProd
 import { isOrgAdmin } from '../../../lib/roles'
 import { ReceiptPrintModal } from '../ReceiptPrintModal'
 import type { POReceiptData } from '../ReceiptPrintModal'
+import { SupplierQuickCreate } from '../quick-create/SupplierQuickCreate'
+import { ProductQuickCreate } from '../quick-create/ProductQuickCreate'
+import { CurrencyQuickCreate } from '../quick-create/CurrencyQuickCreate'
 import {
   DEFAULT_TRANSACTION_CURRENCY,
   currenciesForSelect,
@@ -40,7 +43,7 @@ function emptyLineItem(): POFormItem {
   return { productName: '', quantity: 1, unitCost: 0, isCustom: true, selectedProduct: '' }
 }
 
-function PurchaseOrderForm({
+export function PurchaseOrderForm({
   initial,
   onSave,
   onCancel,
@@ -48,6 +51,8 @@ function PurchaseOrderForm({
   language,
   suppliers,
   supplierProducts,
+  canQuickAdd = false,
+  nested = false,
 }: {
   initial?: (Partial<PurchaseOrder> & { items?: Omit<PurchaseOrderItem, 'purchaseOrderId' | 'createdAt' | 'updatedAt'>[] }) | null
   onSave: (data: POFormData, options?: { addAnother?: boolean }) => void | Promise<void>
@@ -56,7 +61,15 @@ function PurchaseOrderForm({
   language: 'ar' | 'fr'
   suppliers: Supplier[]
   supplierProducts: SupplierProduct[]
+  canQuickAdd?: boolean
+  nested?: boolean
 }) {
+  const addSupplier = useAppStore(s => s.addSupplier)
+  const addSupplierProduct = useAppStore(s => s.addSupplierProduct)
+  const [showSupplierQuick, setShowSupplierQuick] = useState(false)
+  const [showProductQuick, setShowProductQuick] = useState(false)
+  const [showCurrencyQuick, setShowCurrencyQuick] = useState(false)
+  const [currencyListTick, setCurrencyListTick] = useState(0)
   const [supplierId, setSupplierId] = useState(initial?.supplierId || '')
   const [orderDate, setOrderDate] = useState(initial?.orderDate || new Date().toISOString().split('T')[0])
   const [expectedCompletionDate, setExpectedCompletionDate] = useState(initial?.expectedCompletionDate || '')
@@ -184,7 +197,7 @@ function PurchaseOrderForm({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div className={`fixed inset-0 bg-black/50 ${nested ? 'z-[60]' : 'z-50'} flex items-center justify-center p-4`}>
       <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
@@ -204,15 +217,27 @@ function PurchaseOrderForm({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 {t('suppliers.supplierName')} *
               </label>
-              <select
-                value={supplierId}
-                onChange={e => setSupplierId(e.target.value)}
-                disabled={Boolean(initial?.id)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                <option value="">{language === 'ar' ? 'اختر مورداً...' : 'Sélectionner un fournisseur...'}</option>
-                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={supplierId}
+                  onChange={e => setSupplierId(e.target.value)}
+                  disabled={Boolean(initial?.id)}
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  <option value="">{language === 'ar' ? 'اختر مورداً...' : 'Sélectionner un fournisseur...'}</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                {canQuickAdd && !initial?.id && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSupplierQuick(true)}
+                    title={t('common.addNew')}
+                    className="shrink-0 px-2.5 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div>
@@ -245,17 +270,30 @@ function PurchaseOrderForm({
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 {t('suppliers.selectCurrency')}
               </label>
-              <select
-                value={currency}
-                onChange={e => setCurrency(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
-              >
-                {currenciesForSelect(currency).map(c => (
-                  <option key={c.code} value={c.code}>
-                    {currencyOptionLabel(c.code, language)}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  key={currencyListTick}
+                  value={currency}
+                  onChange={e => setCurrency(e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+                >
+                  {currenciesForSelect(currency).map(c => (
+                    <option key={c.code} value={c.code}>
+                      {currencyOptionLabel(c.code, language)}
+                    </option>
+                  ))}
+                </select>
+                {canQuickAdd && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrencyQuick(true)}
+                    title={t('common.addNew')}
+                    className="shrink-0 px-2.5 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div>
@@ -278,14 +316,25 @@ function PurchaseOrderForm({
               <h3 className="font-semibold text-gray-900 dark:text-white text-sm">
                 {t('suppliers.lineItems')}
               </h3>
-              <button
-                type="button"
-                onClick={addItem}
-                disabled={!supplierId}
-                className="flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 disabled:opacity-50"
-              >
-                <Plus className="w-3.5 h-3.5" /> {t('suppliers.addLineItem')}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={addItem}
+                  disabled={!supplierId}
+                  className="flex items-center gap-1 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 disabled:opacity-50"
+                >
+                  <Plus className="w-3.5 h-3.5" /> {t('suppliers.addLineItem')}
+                </button>
+                {canQuickAdd && supplierId && (
+                  <button
+                    type="button"
+                    onClick={() => setShowProductQuick(true)}
+                    className="flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 disabled:opacity-50"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> {t('common.addNew')} {t('suppliers.productName')}
+                  </button>
+                )}
+              </div>
             </div>
 
             {!supplierId ? (
@@ -418,6 +467,57 @@ function PurchaseOrderForm({
           </div>
         </div>
       </div>
+      {showSupplierQuick && (
+        <SupplierQuickCreate
+          nested
+          onCancel={() => setShowSupplierQuick(false)}
+          onSave={async (data) => {
+            try {
+              const created = await addSupplier(data)
+              setSupplierId(created.id)
+              if (created.preferredCurrency) setCurrency(created.preferredCurrency)
+              setShowSupplierQuick(false)
+              toast.success(t('common.success'))
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : t('common.error'))
+            }
+          }}
+        />
+      )}
+      {showProductQuick && supplierId && (
+        <ProductQuickCreate
+          nested
+          onCancel={() => setShowProductQuick(false)}
+          onSave={async (data) => {
+            try {
+              const created = await addSupplierProduct({ ...data, supplierId })
+              setItems(prev => [...prev, {
+                productName: created.name,
+                quantity: 1,
+                unitCost: created.unitCost,
+                isCustom: false,
+                selectedProduct: created.id,
+              }])
+              setShowProductQuick(false)
+              toast.success(t('common.success'))
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : t('common.error'))
+            }
+          }}
+        />
+      )}
+      {showCurrencyQuick && (
+        <CurrencyQuickCreate
+          nested
+          onCancel={() => setShowCurrencyQuick(false)}
+          onSave={async (code) => {
+            setCurrency(code)
+            setCurrencyListTick(n => n + 1)
+            setShowCurrencyQuick(false)
+            toast.success(t('common.success'))
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -629,7 +729,7 @@ export function PurchaseOrders() {
           <p className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} {t('common.records')}</p>
         </div>
         {isOrgAdmin(role) && (
-          <button onClick={() => navigate('/suppliers/purchase-orders/new')} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+          <button onClick={() => { setEditItem(null); setShowForm(true) }} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
             <Plus className="w-4 h-4" /> {t('suppliers.addPurchaseOrder')}
           </button>
         )}
@@ -712,6 +812,7 @@ export function PurchaseOrders() {
           language={language}
           suppliers={suppliers}
           supplierProducts={supplierProducts}
+          canQuickAdd={isOrgAdmin(role)}
         />
       )}
 

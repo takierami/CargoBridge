@@ -8,6 +8,10 @@ import { formatDate } from '../../../utils/dateUtils'
 import type { SupplierProduct, SupplierDocument, SupplierDocumentType, SupplierAdjustment, CommunicationType } from '../../../types'
 import { isOrgAdmin } from '../../../lib/roles'
 import { DEFAULT_TRANSACTION_CURRENCY, currenciesForSelect, currencySymbol } from '../../../lib/currencies'
+import { PurchaseOrderForm } from './PurchaseOrders'
+import { PaymentForm } from './Payments'
+import { TaskQuickCreate } from '../quick-create/TaskQuickCreate'
+import { RATING_CRITERIA_LABELS_AR, RATING_CRITERIA_LABELS_FR } from '../../../types'
 
 type Tab = 'overview' | 'products' | 'documents' | 'communications' | 'adjustments' | 'tasks' | 'performance' | 'rating'
 const TABS: Tab[] = ['overview', 'products', 'documents', 'communications', 'adjustments', 'tasks', 'performance', 'rating']
@@ -316,12 +320,16 @@ export function SupplierProfile() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { t, language, role, suppliers, supplierProducts, supplierDocuments, supplierCommunications, supplierAdjustments, supplierTasks,
+    purchaseOrders, supplierPayments, getPOBalance,
     addSupplierProduct, updateSupplierProduct, deleteSupplierProduct,
     addSupplierDocument, deleteSupplierDocument,
     addSupplierCommunication, deleteSupplierCommunication,
     addSupplierAdjustment, deleteSupplierAdjustment,
+    addPurchaseOrder, updatePurchaseOrderStatus,
+    addSupplierPayment,
+    addSupplierTask, updateSupplierTask,
     markTaskComplete, deleteSupplierTask,
-    getSupplierRating, loadSuppliers } = useAppStore()
+    getSupplierRating, upsertSupplierRating, loadSuppliers } = useAppStore()
   const [activeTab, setActiveTab] = useState<Tab>('overview')
   const [showProductForm, setShowProductForm] = useState(false)
   const [editProduct, setEditProduct] = useState<SupplierProduct | null>(null)
@@ -330,6 +338,21 @@ export function SupplierProfile() {
   const [commForm, setCommForm] = useState({ type: 'phone_call' as CommunicationType, summary: '', date: new Date().toISOString().slice(0, 10) })
   const [showAdjForm, setShowAdjForm] = useState(false)
   const [adjForm, setAdjForm] = useState({ type: 'credit' as SupplierAdjustment['type'], amount: 0, currency: DEFAULT_TRANSACTION_CURRENCY, reason: '', date: new Date().toISOString().slice(0, 10) })
+  const [showPoForm, setShowPoForm] = useState(false)
+  const [showPaymentForm, setShowPaymentForm] = useState(false)
+  const [showTaskForm, setShowTaskForm] = useState(false)
+  const [editTask, setEditTask] = useState<import('../../../types').SupplierTask | null>(null)
+  const [showInlineRating, setShowInlineRating] = useState(false)
+  const ratingLabels = language === 'ar' ? RATING_CRITERIA_LABELS_AR : RATING_CRITERIA_LABELS_FR
+  const [ratingForm, setRatingForm] = useState({
+    quality: 0,
+    communication: 0,
+    deliverySpeed: 0,
+    reliability: 0,
+    pricing: 0,
+    flexibility: 0,
+    note: '',
+  })
 
   const supplier = useMemo(() => suppliers.find(s => s.id === id), [suppliers, id])
   const products = useMemo(() => supplierProducts.filter(p => p.supplierId === id), [supplierProducts, id])
@@ -338,6 +361,19 @@ export function SupplierProfile() {
   const adjustments = useMemo(() => supplierAdjustments.filter(a => a.supplierId === id && !a.isDeleted), [supplierAdjustments, id])
   const tasks = useMemo(() => supplierTasks.filter(t => t.supplierId === id), [supplierTasks, id])
   const existingRating = useMemo(() => id ? getSupplierRating(id) : undefined, [id, getSupplierRating])
+
+  useEffect(() => {
+    if (!existingRating) return
+    setRatingForm({
+      quality: existingRating.quality || 0,
+      communication: existingRating.communication || 0,
+      deliverySpeed: existingRating.deliverySpeed || 0,
+      reliability: existingRating.reliability || 0,
+      pricing: existingRating.pricing || 0,
+      flexibility: existingRating.flexibility || 0,
+      note: existingRating.note || '',
+    })
+  }, [existingRating])
 
   useEffect(() => {
     if (!id) return
@@ -595,10 +631,10 @@ export function SupplierProfile() {
             {/* Quick Actions — match profile reference: both actions visible */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4">
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => navigate('/suppliers/purchase-orders/new?supplierId=' + supplier.id)} className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium transition-colors">
+                <button onClick={() => setShowPoForm(true)} className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-sm font-medium transition-colors">
                   <Plus className="w-3.5 h-3.5" /> {t('suppliers.addPurchaseOrder')}
                 </button>
-                <button onClick={() => navigate('/suppliers/payments/new?supplierId=' + supplier.id)} className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 px-3 py-2 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg text-sm font-medium transition-colors">
+                <button onClick={() => setShowPaymentForm(true)} className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 px-3 py-2 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 rounded-lg text-sm font-medium transition-colors">
                   <Plus className="w-3.5 h-3.5" /> {t('suppliers.addPayment')}
                 </button>
               </div>
@@ -920,7 +956,7 @@ export function SupplierProfile() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
           <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900 dark:text-white">{t('suppliers.tasks')}</h3>
-            <button onClick={() => navigate('/suppliers/tasks/new?supplierId=' + id)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+            <button onClick={() => { setEditTask(null); setShowTaskForm(true) }} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
               <Plus className="w-4 h-4" /> {t('suppliers.addTask')}
             </button>
           </div>
@@ -966,8 +1002,8 @@ export function SupplierProfile() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-900 dark:text-white">{t('suppliers.performance')}</h3>
-              <button onClick={() => navigate('/suppliers/' + id + '/performance')} className="text-sm text-blue-500 hover:text-blue-600">
-                {t('suppliers.viewPerformance')} →
+              <button onClick={() => { setActiveTab('rating'); setShowInlineRating(true) }} className="text-sm text-blue-500 hover:text-blue-600">
+                {existingRating ? t('common.edit') : t('suppliers.rateSupplier')}
               </button>
             </div>
             {existingRating ? (
@@ -1002,7 +1038,7 @@ export function SupplierProfile() {
               <div className="text-center py-8">
                 <Star className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
                 <p className="text-gray-500 dark:text-gray-400">{t('suppliers.unrated')}</p>
-                <button onClick={() => navigate('/suppliers/' + id + '/performance')} className="mt-3 text-sm text-blue-500 hover:text-blue-600">
+                <button onClick={() => { setActiveTab('rating'); setShowInlineRating(true) }} className="mt-3 text-sm text-blue-500 hover:text-blue-600">
                   {t('suppliers.rateSupplier')}
                 </button>
               </div>
@@ -1016,11 +1052,66 @@ export function SupplierProfile() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-900 dark:text-white">{t('suppliers.rating')}</h3>
-              <button onClick={() => navigate('/suppliers/' + id + '/performance')} className="text-sm text-blue-500 hover:text-blue-600">
-                {existingRating ? t('suppliers.saveRating') : t('suppliers.rateSupplier')}
-              </button>
+              {!showInlineRating && (
+                <button onClick={() => setShowInlineRating(true)} className="text-sm text-blue-500 hover:text-blue-600">
+                  {existingRating ? t('common.edit') : t('suppliers.rateSupplier')}
+                </button>
+              )}
             </div>
-            {existingRating ? (
+            {showInlineRating || !existingRating ? (
+              <div className="space-y-4">
+                {(Object.keys(ratingLabels) as Array<keyof typeof ratingLabels>).map(criterion => (
+                  <div key={criterion} className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{ratingLabels[criterion]}</p>
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setRatingForm(f => ({ ...f, [criterion]: star }))}
+                          className="p-0.5"
+                        >
+                          <Star className={cn('w-5 h-5', star <= ratingForm[criterion] ? 'fill-amber-400 text-amber-400' : 'text-gray-300 dark:text-gray-600')} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common.notes')}</label>
+                  <textarea
+                    value={ratingForm.note}
+                    onChange={e => setRatingForm(f => ({ ...f, note: e.target.value }))}
+                    rows={2}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!id) return
+                      const hasAny = [ratingForm.quality, ratingForm.communication, ratingForm.deliverySpeed, ratingForm.reliability, ratingForm.pricing, ratingForm.flexibility].some(s => s > 0)
+                      if (!hasAny) {
+                        toast.error(t('suppliers.ratingRequired'))
+                        return
+                      }
+                      upsertSupplierRating(id, ratingForm)
+                      toast.success(t('common.success'))
+                      setShowInlineRating(false)
+                    }}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium"
+                  >
+                    {t('suppliers.saveRating')}
+                  </button>
+                  {existingRating && (
+                    <button type="button" onClick={() => setShowInlineRating(false)} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium">
+                      {t('common.cancel')}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-center py-4">
                   <div className="text-center">
@@ -1043,14 +1134,6 @@ export function SupplierProfile() {
                   {t('suppliers.ratedAt')}: {new Date(existingRating.ratedAt).toLocaleDateString(language === 'ar' ? 'ar-DZ' : 'fr-FR')}
                 </div>
               </div>
-            ) : (
-              <div className="text-center py-8">
-                <Star className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
-                <p className="text-gray-500 dark:text-gray-400">{t('suppliers.unrated')}</p>
-                <button onClick={() => navigate('/suppliers/' + id + '/performance')} className="mt-3 flex items-center gap-1.5 mx-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium">
-                  <Plus className="w-4 h-4" /> {t('suppliers.rateSupplier')}
-                </button>
-              </div>
             )}
           </div>
         </div>
@@ -1071,6 +1154,108 @@ export function SupplierProfile() {
           onCancel={() => setShowDocumentForm(false)}
           t={t}
           language={language}
+        />
+      )}
+
+      {showPoForm && (
+        <PurchaseOrderForm
+          initial={{ supplierId: supplier.id, status: 'confirmed' }}
+          onCancel={() => setShowPoForm(false)}
+          t={t}
+          language={language}
+          suppliers={suppliers}
+          supplierProducts={supplierProducts}
+          canQuickAdd={isOrgAdmin(role)}
+          onSave={async (data) => {
+            try {
+              let saved = await addPurchaseOrder({
+                supplierId: data.supplierId,
+                orderDate: data.orderDate,
+                expectedCompletionDate: data.expectedCompletionDate || undefined,
+                currency: data.currency,
+                status: data.status,
+                notes: data.notes || undefined,
+                items: data.items.map(item => ({
+                  productName: item.productName,
+                  quantity: item.quantity,
+                  unitCost: item.unitCost,
+                })),
+              })
+              if (data.status === 'confirmed' && saved.status === 'draft') {
+                const toSent = await updatePurchaseOrderStatus(saved.id, 'sent')
+                if (toSent.success) {
+                  await updatePurchaseOrderStatus(saved.id, 'confirmed')
+                }
+              }
+              toast.success(t('common.success'))
+              setShowPoForm(false)
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : t('common.error'))
+            }
+          }}
+        />
+      )}
+
+      {showPaymentForm && (
+        <PaymentForm
+          initial={{ supplierId: supplier.id }}
+          onCancel={() => setShowPaymentForm(false)}
+          t={t}
+          language={language}
+          suppliers={[{ id: supplier.id, name: supplier.name, preferredCurrency: supplier.preferredCurrency }]}
+          purchaseOrders={purchaseOrders.map(po => ({
+            id: po.id,
+            poNumber: po.poNumber,
+            supplierId: po.supplierId,
+            totalAmount: po.totalAmount,
+            status: po.status,
+            currency: po.currency,
+          }))}
+          getPOBalance={getPOBalance}
+          canQuickAdd={isOrgAdmin(role)}
+          supplierProducts={supplierProducts}
+          onSave={async (data) => {
+            try {
+              await addSupplierPayment({
+                supplierId: data.supplierId,
+                purchaseOrderId: data.purchaseOrderId || undefined,
+                amount: data.amount,
+                amountPaid: data.amountPaid,
+                currency: data.currency,
+                paymentMethod: data.paymentMethod,
+                paymentDate: data.paymentDate,
+                status: data.status,
+                notes: data.notes || undefined,
+              })
+              toast.success(t('common.success'))
+              setShowPaymentForm(false)
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : t('common.error'))
+            }
+          }}
+        />
+      )}
+
+      {showTaskForm && (
+        <TaskQuickCreate
+          initial={editTask || undefined}
+          defaultSupplierId={supplier.id}
+          lockSupplier
+          onCancel={() => { setShowTaskForm(false); setEditTask(null) }}
+          onSave={async (data) => {
+            try {
+              if (editTask?.id) {
+                await updateSupplierTask(editTask.id, data)
+              } else {
+                await addSupplierTask(data)
+              }
+              toast.success(t('common.success'))
+              setShowTaskForm(false)
+              setEditTask(null)
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : t('common.error'))
+            }
+          }}
         />
       )}
     </div>

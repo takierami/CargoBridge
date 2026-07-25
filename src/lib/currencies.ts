@@ -1,4 +1,6 @@
 /** Transaction currencies for PO / payment forms. DZD is primary. */
+import { exchangeRateService } from '../services/currencyService'
+
 export interface TransactionCurrency {
   code: string
   symbol: string
@@ -38,13 +40,26 @@ export function currencyOptionLabel(code: string, language: 'ar' | 'fr' = 'ar'):
   return `${row.code} — ${name}`
 }
 
-/** Include an unknown/legacy code so existing records stay selectable. */
+/** Include an unknown/legacy code so existing records stay selectable.
+ * Also merges enabled currencies from currencyService (Calculator FX list). */
 export function currenciesForSelect(current?: string): TransactionCurrency[] {
-  if (current && !TRANSACTION_CURRENCIES.some((c) => c.code === current)) {
-    return [
-      ...TRANSACTION_CURRENCIES,
-      { code: current, symbol: current, labelAr: current, labelFr: current },
-    ]
+  const fromService = exchangeRateService
+    .getAll()
+    .filter((c) => c.isEnabled)
+    .map((c) => ({
+      code: c.code,
+      symbol: c.symbol || c.code,
+      labelAr: c.name || c.code,
+      labelFr: c.nameFr || c.name || c.code,
+    }))
+
+  const byCode = new Map<string, TransactionCurrency>()
+  for (const row of TRANSACTION_CURRENCIES) byCode.set(row.code, row)
+  for (const row of fromService) {
+    if (!byCode.has(row.code)) byCode.set(row.code, row)
   }
-  return TRANSACTION_CURRENCIES
+  if (current && !byCode.has(current)) {
+    byCode.set(current, { code: current, symbol: current, labelAr: current, labelFr: current })
+  }
+  return Array.from(byCode.values())
 }

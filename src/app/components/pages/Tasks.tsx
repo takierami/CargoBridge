@@ -1,23 +1,46 @@
-import { useState, useMemo } from 'react'
-import { useNavigate } from 'react-router'
-import { Plus, Search, X, CheckCircle, Trash2, AlertTriangle } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router'
+import { Plus, Search, X, CheckCircle, Trash2, AlertTriangle, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
 import { cn } from '../../utils/cn'
-import { taskService, isOverdue } from '../../../services/taskService'
+import { isOverdue } from '../../../services/taskService'
 import type { SupplierTask, TaskStatus } from '../../../types'
-
-const TASK_STATUSES: TaskStatus[] = ['pending', 'completed']
+import { TaskQuickCreate } from '../quick-create/TaskQuickCreate'
+import { isOrgAdmin } from '../../../lib/roles'
 
 export function Tasks() {
-  const { t, language, supplierTasks, suppliers, addSupplierTask, updateSupplierTask, markTaskComplete, deleteSupplierTask } = useAppStore()
+  const { t, role, supplierTasks, suppliers, addSupplierTask, updateSupplierTask, markTaskComplete, deleteSupplierTask } = useAppStore()
   const navigate = useNavigate()
+  const { id } = useParams()
+  const [searchParams] = useSearchParams()
+  const location = useLocation()
+  const supplierIdParam = searchParams.get('supplierId')
+  const isNew = id === 'new' || location.pathname.endsWith('/new')
+
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [supplierFilter, setSupplierFilter] = useState<string>('all')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [showOverdueOnly, setShowOverdueOnly] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [editItem, setEditItem] = useState<SupplierTask | null>(null)
+
+  const currentTask = useMemo(() => {
+    if (!id || id === 'new' || isNew) return null
+    return supplierTasks.find(task => task.id === id) || null
+  }, [id, isNew, supplierTasks])
+
+  useEffect(() => {
+    if (currentTask) {
+      setEditItem(currentTask)
+      setShowForm(true)
+    } else if (isNew) {
+      setEditItem(supplierIdParam ? { supplierId: supplierIdParam } as SupplierTask : null)
+      setShowForm(true)
+    }
+  }, [currentTask, isNew, supplierIdParam])
 
   const filtered = useMemo(() => {
     const today = new Date().toISOString().split('T')[0]
@@ -39,16 +62,22 @@ export function Tasks() {
     return supplier ? supplier.name : '—'
   }
 
-  const handleMarkComplete = (id: string) => {
-    markTaskComplete(id)
+  const handleMarkComplete = (taskId: string) => {
+    markTaskComplete(taskId)
     toast.success(t('suppliers.taskCompleted'))
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (taskId: string) => {
     if (confirm(t('suppliers.confirmDelete'))) {
-      deleteSupplierTask(id)
+      deleteSupplierTask(taskId)
       toast.success(t('common.success'))
     }
+  }
+
+  const handleCloseForm = () => {
+    setShowForm(false)
+    setEditItem(null)
+    if (id || isNew) navigate('/suppliers/tasks')
   }
 
   const taskStatusColor = (task: SupplierTask) => {
@@ -64,9 +93,14 @@ export function Tasks() {
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('suppliers.tasks')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} {t('common.records')}</p>
         </div>
-        <button onClick={() => navigate('/suppliers/tasks/new')} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-          <Plus className="w-4 h-4" /> {t('suppliers.addTask')}
-        </button>
+        {isOrgAdmin(role) && (
+          <button
+            onClick={() => { setEditItem(null); setShowForm(true) }}
+            className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Plus className="w-4 h-4" /> {t('suppliers.addTask')}
+          </button>
+        )}
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 space-y-4">
@@ -89,8 +123,8 @@ export function Tasks() {
           </button>
         </div>
         <div className="flex flex-wrap gap-3">
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" placeholder={t('suppliers.statementFrom')} />
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" placeholder={t('suppliers.statementTo')} />
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
           {(statusFilter !== 'all' || supplierFilter !== 'all' || dateFrom || dateTo || showOverdueOnly) && (
             <button onClick={() => { setStatusFilter('all'); setSupplierFilter('all'); setDateFrom(''); setDateTo(''); setShowOverdueOnly(false) }} className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 flex items-center gap-1">
               <X className="w-3.5 h-3.5" /> {t('common.clear')}
@@ -126,17 +160,42 @@ export function Tasks() {
                       <CheckCircle className="w-4 h-4" />
                     </button>
                   )}
-                  <button onClick={() => navigate('/suppliers/tasks/' + task.id)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg">
-                    <X className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => handleDelete(task.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {isOrgAdmin(role) && (
+                    <button onClick={() => { setEditItem(task); setShowForm(true) }} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg">
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
+                  {isOrgAdmin(role) && (
+                    <button onClick={() => handleDelete(task.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {showForm && (
+        <TaskQuickCreate
+          initial={editItem || undefined}
+          defaultSupplierId={supplierIdParam || undefined}
+          onCancel={handleCloseForm}
+          onSave={async (data) => {
+            try {
+              if (editItem?.id) {
+                await updateSupplierTask(editItem.id, data)
+              } else {
+                await addSupplierTask(data)
+              }
+              toast.success(t('common.success'))
+              handleCloseForm()
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : t('common.error'))
+            }
+          }}
+        />
       )}
     </div>
   )

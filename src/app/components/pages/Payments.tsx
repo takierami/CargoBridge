@@ -14,6 +14,9 @@ import {
   currencyOptionLabel,
   currencySymbol,
 } from '../../../lib/currencies'
+import { SupplierQuickCreate } from '../quick-create/SupplierQuickCreate'
+import { CurrencyQuickCreate } from '../quick-create/CurrencyQuickCreate'
+import { PurchaseOrderForm } from './PurchaseOrders'
 
 const PAYMENT_METHODS: PaymentMethod[] = ['bank_transfer', 'cash', 'wise', 'western_union', 'paypal', 'other']
 const PAYMENT_STATUSES: PaymentStatus[] = ['pending', 'partially_paid', 'fully_paid', 'overdue']
@@ -39,7 +42,7 @@ function deriveStatusFromAmounts(amount: number, amountPaid: number): PaymentSta
 type PaymentSupplierOption = { id: string; name: string; preferredCurrency?: string }
 type PaymentPOOption = { id: string; poNumber: string; supplierId: string; totalAmount: number; status: string; currency: string }
 
-function PaymentForm({ initial, onSave, onCancel, t, language, suppliers, purchaseOrders, getPOBalance }: {
+export function PaymentForm({ initial, onSave, onCancel, t, language, suppliers, purchaseOrders, getPOBalance, canQuickAdd = false, supplierProducts = [] }: {
   initial?: Partial<SupplierPayment>
   onSave: (data: PaymentFormData, options?: { addAnother?: boolean }) => void | Promise<void>
   onCancel: () => void
@@ -48,7 +51,14 @@ function PaymentForm({ initial, onSave, onCancel, t, language, suppliers, purcha
   suppliers: PaymentSupplierOption[]
   purchaseOrders: PaymentPOOption[]
   getPOBalance: (purchaseOrderId: string) => Promise<{ total: number; paid: number; remaining: number }>
+  canQuickAdd?: boolean
+  supplierProducts?: import('../../../types').SupplierProduct[]
 }) {
+  const addSupplier = useAppStore(s => s.addSupplier)
+  const addPurchaseOrder = useAppStore(s => s.addPurchaseOrder)
+  const updatePurchaseOrderStatus = useAppStore(s => s.updatePurchaseOrderStatus)
+  const storeSuppliers = useAppStore(s => s.suppliers)
+
   const defaultCurrency = () => {
     const supplier = suppliers.find(s => s.id === (initial?.supplierId || ''))
     return initial?.currency || supplier?.preferredCurrency || DEFAULT_TRANSACTION_CURRENCY
@@ -66,6 +76,10 @@ function PaymentForm({ initial, onSave, onCancel, t, language, suppliers, purcha
     notes: initial?.notes || '',
   })
   const [saving, setSaving] = useState(false)
+  const [showSupplierQuick, setShowSupplierQuick] = useState(false)
+  const [showPoQuick, setShowPoQuick] = useState(false)
+  const [showCurrencyQuick, setShowCurrencyQuick] = useState(false)
+  const [currencyListTick, setCurrencyListTick] = useState(0)
 
   const set = (k: keyof PaymentFormData, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
@@ -186,19 +200,42 @@ function PaymentForm({ initial, onSave, onCancel, t, language, suppliers, purcha
         <div className="p-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.supplierName')} *</label>
-            <select
-              value={form.supplierId}
-              onChange={e => selectSupplier(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">{t('suppliers.selectSupplier')}</option>
-              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+            <div className="flex gap-2">
+              <select
+                value={form.supplierId}
+                onChange={e => selectSupplier(e.target.value)}
+                className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">{t('suppliers.selectSupplier')}</option>
+                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+              {canQuickAdd && (
+                <button
+                  type="button"
+                  onClick={() => setShowSupplierQuick(true)}
+                  title={t('common.addNew')}
+                  className="shrink-0 px-2.5 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
 
           {form.supplierId && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.linkedPO')}</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('suppliers.linkedPO')}</label>
+                {canQuickAdd && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPoQuick(true)}
+                    className="flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> {t('common.addNew')}
+                  </button>
+                )}
+              </div>
               <select
                 value={form.purchaseOrderId}
                 onChange={e => applyPOSelection(e.target.value)}
@@ -247,13 +284,30 @@ function PaymentForm({ initial, onSave, onCancel, t, language, suppliers, purcha
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.selectCurrency')}</label>
-              <select value={form.currency} onChange={e => set('currency', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
-                {currenciesForSelect(form.currency).map(c => (
-                  <option key={c.code} value={c.code}>
-                    {currencyOptionLabel(c.code, language)}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  key={currencyListTick}
+                  value={form.currency}
+                  onChange={e => set('currency', e.target.value)}
+                  className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+                >
+                  {currenciesForSelect(form.currency).map(c => (
+                    <option key={c.code} value={c.code}>
+                      {currencyOptionLabel(c.code, language)}
+                    </option>
+                  ))}
+                </select>
+                {canQuickAdd && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrencyQuick(true)}
+                    title={t('common.addNew')}
+                    className="shrink-0 px-2.5 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.paymentMethod')}</label>
@@ -301,12 +355,89 @@ function PaymentForm({ initial, onSave, onCancel, t, language, suppliers, purcha
           <button onClick={onCancel} className="flex-1 min-w-[100px] py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors">{t('common.cancel')}</button>
         </div>
       </div>
+      {showSupplierQuick && (
+        <SupplierQuickCreate
+          nested
+          onCancel={() => setShowSupplierQuick(false)}
+          onSave={async (data) => {
+            try {
+              const created = await addSupplier(data)
+              selectSupplier(created.id)
+              setShowSupplierQuick(false)
+              toast.success(t('common.success'))
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : t('common.error'))
+            }
+          }}
+        />
+      )}
+      {showCurrencyQuick && (
+        <CurrencyQuickCreate
+          nested
+          onCancel={() => setShowCurrencyQuick(false)}
+          onSave={async (code) => {
+            set('currency', code)
+            setCurrencyListTick(n => n + 1)
+            setShowCurrencyQuick(false)
+            toast.success(t('common.success'))
+          }}
+        />
+      )}
+      {showPoQuick && form.supplierId && (
+        <PurchaseOrderForm
+          nested
+          initial={{ supplierId: form.supplierId, status: 'confirmed' }}
+          onCancel={() => setShowPoQuick(false)}
+          t={t}
+          language={language}
+          suppliers={storeSuppliers}
+          supplierProducts={supplierProducts}
+          canQuickAdd={canQuickAdd}
+          onSave={async (data) => {
+            try {
+              let saved = await addPurchaseOrder({
+                supplierId: data.supplierId,
+                orderDate: data.orderDate,
+                expectedCompletionDate: data.expectedCompletionDate || undefined,
+                currency: data.currency,
+                status: data.status,
+                notes: data.notes || undefined,
+                items: data.items.map(item => ({
+                  productName: item.productName,
+                  quantity: item.quantity,
+                  unitCost: item.unitCost,
+                })),
+              })
+              if (data.status === 'confirmed' && saved.status === 'draft') {
+                const toSent = await updatePurchaseOrderStatus(saved.id, 'sent')
+                if (toSent.success) {
+                  const toConfirmed = await updatePurchaseOrderStatus(saved.id, 'confirmed')
+                  if (toConfirmed.success) saved = { ...saved, status: 'confirmed' }
+                }
+              }
+              setShowPoQuick(false)
+              setForm(f => ({
+                ...f,
+                purchaseOrderId: saved.id,
+                amount: saved.totalAmount,
+                amountPaid: saved.totalAmount,
+                currency: saved.currency || f.currency,
+                status: deriveStatusFromAmounts(saved.totalAmount, saved.totalAmount),
+              }))
+              getPOBalance(saved.id).then(setPoBalance).catch(() => setPoBalance(undefined))
+              toast.success(t('common.success'))
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : t('common.error'))
+            }
+          }}
+        />
+      )}
     </div>
   )
 }
 
 export function Payments() {
-  const { t, language, role, supplierPayments, suppliers, purchaseOrders, addSupplierPayment, updateSupplierPayment, markPaymentAsFullyPaid, deleteSupplierPayment, getPOBalance } = useAppStore()
+  const { t, language, role, supplierPayments, suppliers, purchaseOrders, supplierProducts, addSupplierPayment, updateSupplierPayment, markPaymentAsFullyPaid, deleteSupplierPayment, getPOBalance } = useAppStore()
   const navigate = useNavigate()
   const { id } = useParams()
   const [searchParams] = useSearchParams()
@@ -467,7 +598,7 @@ export function Payments() {
           <p className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} {t('common.records')}</p>
         </div>
         {canManagePayments && (
-          <button onClick={() => navigate('/suppliers/payments/new')} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+          <button onClick={() => { setEditItem(null); setShowForm(true) }} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
             <Plus className="w-4 h-4" /> {t('suppliers.addPayment')}
           </button>
         )}
@@ -569,6 +700,8 @@ export function Payments() {
             currency: po.currency,
           }))}
           getPOBalance={getPOBalance}
+          canQuickAdd={isOrgAdmin(role)}
+          supplierProducts={supplierProducts}
         />
       )}
 

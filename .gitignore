@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+backend/.venv/
+backend/venv/
+__pycache__/
+*.py[cod]
+
+# Env files (never commit secrets; use .env.example as the template)
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Build output (Netlify builds this fresh from source)
+dist/
+
+# Logs / debug artifacts
+*.log
+debug-*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

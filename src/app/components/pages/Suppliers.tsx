@@ -712,13 +712,11 @@ export function Suppliers() {
       toast.error(t('common.error'))
       return
     }
-    let savedId = editItem?.id
     try {
       if (editItem) {
         await updateSupplier(editItem.id, data)
       } else {
-        const created = await addSupplier(data)
-        savedId = created.id
+        await addSupplier(data)
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('common.error'))
@@ -731,8 +729,6 @@ export function Suppliers() {
     }
     setShowForm(false)
     setEditItem(null)
-    // Open the supplier dashboard after create/update
-    if (savedId) navigate(`/suppliers/${savedId}`)
   }
 
   const handleDelete = async (id: string) => {

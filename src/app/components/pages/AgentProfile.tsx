@@ -1,14 +1,19 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router'
-import { ArrowLeft, Phone, Globe2, FileText, Package, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Phone, Globe2, FileText, Package, TrendingUp, AlertTriangle, CheckCircle2, Pencil } from 'lucide-react'
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, Tooltip } from 'recharts'
+import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
 import { StatusBadge } from '../ui/StatusBadge'
 import { formatDate, formatDistanceToNow } from '../../../utils/dateUtils'
+import { AgentQuickCreate } from '../quick-create/AgentQuickCreate'
+import { isOrgAdmin } from '../../../lib/roles'
 
 export function AgentProfile() {
   const { id } = useParams<{ id: string }>()
-  const { t, language, agents, goods } = useAppStore()
+  const { t, language, agents, goods, role, updateAgent } = useAppStore()
   const navigate = useNavigate()
+  const [showEdit, setShowEdit] = useState(false)
 
   const agent = agents.find(a => a.id === id)
   if (!agent) {
@@ -44,7 +49,16 @@ export function AgentProfile() {
         <button onClick={() => navigate('/agents')} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500">
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('agents.profile')}</h1>
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white flex-1">{t('agents.profile')}</h1>
+        {isOrgAdmin(role) && (
+          <button
+            onClick={() => setShowEdit(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium"
+          >
+            <Pencil className="w-4 h-4" />
+            {t('common.edit')}
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -157,6 +171,21 @@ export function AgentProfile() {
           </div>
         </div>
       </div>
+      {showEdit && (
+        <AgentQuickCreate
+          initial={agent}
+          onCancel={() => setShowEdit(false)}
+          onSave={async (data) => {
+            try {
+              await updateAgent(agent.id, data)
+              toast.success(t('common.success'))
+              setShowEdit(false)
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : t('common.error'))
+            }
+          }}
+        />
+      )}
     </div>
   )
 }

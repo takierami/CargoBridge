@@ -366,8 +366,14 @@ export function ReceiptModal({ goods, agent, defaultType = 'reception', onClose 
           className="flex-1 overflow-y-auto bg-gray-100 dark:bg-gray-800 p-6"
         >
           {!activeTemplate ? (
-            <div className="text-center py-16 text-gray-400">
+            <div className="text-center py-16 text-gray-400 space-y-3">
               <p>{t('receipts.noTemplate')}</p>
+              <a
+                href="/settings/templates"
+                className="inline-flex text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                {t('common.addNew')} — {t('nav.settings')}
+              </a>
             </div>
           ) : (
             <div className="mx-auto max-w-[640px]">

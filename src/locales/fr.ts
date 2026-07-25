@@ -32,6 +32,8 @@ export const fr = {
     required: 'Requis',
     optional: 'Optionnel',
     records: 'enregistrement(s)',
+    addNew: 'Ajouter',
+    clear: 'Effacer',
   },
   nav: {
     dashboard: 'Tableau de bord',

@@ -15,6 +15,9 @@ import { trackingService } from '../../../services/trackingService'
 import { goodsService } from '../../../services/goodsService'
 import type { Goods as GoodsType, GoodsStatus, Priority, TemplateType, TransportType } from '../../../types'
 import { isOrgAdmin } from '../../../lib/roles'
+import { AgentQuickCreate } from '../quick-create/AgentQuickCreate'
+import { CurrencyQuickCreate } from '../quick-create/CurrencyQuickCreate'
+import { currenciesForSelect, currencyOptionLabel } from '../../../lib/currencies'
 
 const ALL_TRANSPORT_TYPES: TransportType[] = ['air', 'sea', 'land', 'express', 'other']
 
@@ -23,7 +26,7 @@ const ALL_STATUSES: GoodsStatus[] = [
 ]
 const ALL_CATEGORIES = ['electronics','clothing','food','cosmetics','medicine','tools','furniture','other']
 
-function GoodsForm({
+export function GoodsForm({
   initial, agents, onSave, onCancel, onStatusChange, t, language, role,
 }: {
   initial?: Partial<GoodsType>
@@ -60,6 +63,10 @@ function GoodsForm({
   const [allowedActions, setAllowedActions] = useState<{ status: string; actionKey: string }[]>([])
   const [statusConsistent, setStatusConsistent] = useState(true)
   const [statusBusy, setStatusBusy] = useState(false)
+  const [showAgentQuick, setShowAgentQuick] = useState(false)
+  const [showCurrencyQuick, setShowCurrencyQuick] = useState(false)
+  const [currencyListTick, setCurrencyListTick] = useState(0)
+  const addAgent = useAppStore(s => s.addAgent)
 
   const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
 
@@ -215,13 +222,50 @@ function GoodsForm({
             </div>
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.selectCurrency')}</label>
+            <div className="flex gap-2">
+              <select
+                key={currencyListTick}
+                value={form.valueCurrency}
+                onChange={e => set('valueCurrency', e.target.value)}
+                className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+              >
+                {currenciesForSelect(form.valueCurrency).map(c => (
+                  <option key={c.code} value={c.code}>{currencyOptionLabel(c.code, language)}</option>
+                ))}
+              </select>
+              {isOrgAdmin(role) && (
+                <button
+                  type="button"
+                  onClick={() => setShowCurrencyQuick(true)}
+                  title={t('common.addNew')}
+                  className="shrink-0 px-2.5 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.agent')}</label>
-            <select value={form.agentId} onChange={e => set('agentId', e.target.value)}
-              disabled={!isOrgAdmin(role)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 disabled:opacity-60">
-              {!agentLocked && <option value="">{t('goods.noAgent')}</option>}
-              {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
+            <div className="flex gap-2">
+              <select value={form.agentId} onChange={e => set('agentId', e.target.value)}
+                disabled={!isOrgAdmin(role)}
+                className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 disabled:opacity-60">
+                {!agentLocked && <option value="">{t('goods.noAgent')}</option>}
+                {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+              {isOrgAdmin(role) && !agentLocked && (
+                <button
+                  type="button"
+                  onClick={() => setShowAgentQuick(true)}
+                  title={t('common.addNew')}
+                  className="shrink-0 px-2.5 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-medium hover:bg-blue-100 dark:hover:bg-blue-900/50"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -299,6 +343,39 @@ function GoodsForm({
           </button>
         </div>
       </div>
+      {showAgentQuick && (
+        <AgentQuickCreate
+          nested
+          onCancel={() => setShowAgentQuick(false)}
+          onSave={async (data) => {
+            try {
+              const created = await addAgent({
+                ...data,
+                reliabilityScore: 0,
+                totalDeliveries: 0,
+                delayedDeliveries: 0,
+              })
+              set('agentId', created.id)
+              setShowAgentQuick(false)
+              toast.success(t('common.success'))
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : t('common.error'))
+            }
+          }}
+        />
+      )}
+      {showCurrencyQuick && (
+        <CurrencyQuickCreate
+          nested
+          onCancel={() => setShowCurrencyQuick(false)}
+          onSave={async (code) => {
+            set('valueCurrency', code)
+            setCurrencyListTick(n => n + 1)
+            setShowCurrencyQuick(false)
+            toast.success(t('common.success'))
+          }}
+        />
+      )}
     </div>
   )
 }

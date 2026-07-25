@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useNavigate } from 'react-router'
 import { useAppStore } from '../../../store/appStore'
 import { computeAnalytics } from '../../../services/analyticsService'
 import { cn } from '../../utils/cn'
@@ -35,6 +36,7 @@ function formatCurrency(n: number, currency = 'USD') {
 }
 
 export function Analytics() {
+  const navigate = useNavigate()
   const { t, suppliers, supplierRatings, purchaseOrders, supplierPayments, supplierTasks } = useAppStore()
 
   const twelveMonthsAgo = useMemo(() => {
@@ -121,9 +123,21 @@ export function Analytics() {
                 {analytics.topSuppliersByReliability.map((s) => {
                   const valueData = analytics.topSuppliersByValue.find(v => v.supplierId === s.supplierId)
                   return (
-                    <tr key={s.supplierId} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                    <tr
+                      key={s.supplierId}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/suppliers/${s.supplierId}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          navigate(`/suppliers/${s.supplierId}`)
+                        }
+                      }}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-900/50 cursor-pointer"
+                    >
                       <td className="px-5 py-4">
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">{s.supplierName}</span>
+                        <span className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">{s.supplierName}</span>
                       </td>
                       <td className="px-5 py-4">
                         {s.rating ? <StarRatingDisplay rating={s.rating} /> : <span className="text-gray-400 text-xs">—</span>}
@@ -168,9 +182,21 @@ export function Analytics() {
                 {analytics.largestBalances.map((s) => {
                   const maxOut = analytics.largestBalances[0]?.outstanding || 1
                   return (
-                    <tr key={s.supplierId} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                    <tr
+                      key={s.supplierId}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/suppliers/${s.supplierId}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          navigate(`/suppliers/${s.supplierId}`)
+                        }
+                      }}
+                      className="hover:bg-gray-50 dark:hover:bg-gray-900/50 cursor-pointer"
+                    >
                       <td className="px-5 py-4">
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">{s.supplierName}</span>
+                        <span className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">{s.supplierName}</span>
                       </td>
                       <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{s.totalPurchased > 0 ? Math.round(s.totalPurchased / 1000) + 'K' : 0}</td>
                       <td className="px-5 py-4 text-sm font-mono text-gray-900 dark:text-white">{formatCurrency(s.totalPaid)}</td>

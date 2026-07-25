@@ -449,11 +449,19 @@ export function ReceiptPrintModal({ data, onClose }: Props) {
             </div>
 
             {supplierTemplates.length === 0 ? (
-              <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2">
-                {isAr
-                  ? '⚠️ لا توجد قوالب. أضف قوالب من قسم النماذج في صفحة الموردين أولاً.'
-                  : '⚠️ Aucun modèle. Créez-en un dans l\'onglet Modèles des Fournisseurs.'}
-              </p>
+              <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 space-y-2">
+                <p>
+                  {isAr
+                    ? '⚠️ لا توجد قوالب. أضف قوالب من قسم النماذج في صفحة الموردين أولاً.'
+                    : '⚠️ Aucun modèle. Créez-en un dans l\'onglet Modèles des Fournisseurs.'}
+                </p>
+                <a
+                  href="/suppliers"
+                  className="inline-flex font-medium text-blue-600 hover:text-blue-700"
+                >
+                  {isAr ? 'إدارة القوالب' : 'Gérer les modèles'}
+                </a>
+              </div>
             ) : (
               <div className="flex gap-2">
                 <div className="relative flex-1">
