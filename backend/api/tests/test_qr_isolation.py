@@ -4,7 +4,9 @@ Public GET is a capability URL (token possession); writes require org match.
 """
 import uuid
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -19,9 +21,9 @@ class QrIsolationProofTests(TestCase):
         self.org_a = Organization.objects.create(name='Org A')
         self.org_b = Organization.objects.create(name='Org B')
         self.user_a = User.objects.create_user(username='qr_a', password='StrongPass1!')
-        UserProfile.objects.create(user=self.user_a, organization=self.org_a, role='algeria_admin')
+        UserProfile.objects.create(user=self.user_a, organization=self.org_a, role='admin', office='algeria')
         self.user_b = User.objects.create_user(username='qr_b', password='StrongPass1!')
-        UserProfile.objects.create(user=self.user_b, organization=self.org_b, role='algeria_admin')
+        UserProfile.objects.create(user=self.user_b, organization=self.org_b, role='admin', office='algeria')
         self.agent = Agent.objects.create(
             organization=self.org_a, name='A', phone='1', passport='P', country='DZ',
         )
@@ -83,7 +85,7 @@ class QrIsolationProofTests(TestCase):
 
     def test_generate_qr_org_scoped(self):
         china_a = User.objects.create_user(username='qr_china_a', password='StrongPass1!')
-        UserProfile.objects.create(user=china_a, organization=self.org_a, role='china_admin')
+        UserProfile.objects.create(user=china_a, organization=self.org_a, role='admin', office='china')
         other_goods = Goods.objects.create(
             organization=self.org_b,
             tracking_number='CB-QR-B',

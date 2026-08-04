@@ -178,6 +178,10 @@ function buildMinimalistHTML(data: ReceiptData, companyName: string, lang: strin
 
 // ─── Template variables filler ────────────────────────────────────────────────
 
+function looksLikeHtml(content: string): boolean {
+  return /<(?:style|div|table|section|html)\b/i.test(content)
+}
+
 function fillTemplate(
   content: string,
   data: ReceiptData,
@@ -190,7 +194,6 @@ function fillTemplate(
   const dateStr = now.toLocaleDateString(isAr ? 'ar-DZ' : 'fr-DZ')
   const timeStr = now.toLocaleTimeString(isAr ? 'ar-DZ' : 'fr-DZ', { hour: '2-digit', minute: '2-digit' })
 
-  // Supplier-level fields available for both Arabic and English placeholders
   const supplierCountry = supplierRecord?.country ?? '—'
   const supplierCity = supplierRecord?.city ?? '—'
   const supplierAddress = supplierRecord?.address ?? '—'
@@ -199,11 +202,11 @@ function fillTemplate(
   const supplierCode = supplierRecord?.code ?? '—'
 
   const vars: Record<string, string> = {
-    // ── English camelCase ──
     companyName,
     currentDate: dateStr,
     currentTime: timeStr,
     currentDateTime: `${dateStr} — ${timeStr}`,
+    todayDate: dateStr,
     supplierName: data.supplierName,
     supplierCountry,
     supplierCity,
@@ -211,7 +214,13 @@ function fillTemplate(
     supplierPhone,
     supplierEmail,
     supplierCode,
-    // ── Arabic placeholder keys (as used in the Suppliers → النماذج editor) ──
+    // English aliases used by built-in HTML templates
+    address: supplierAddress,
+    city: supplierCity,
+    phone: supplierPhone,
+    email: supplierEmail,
+    imageNumber: supplierCode || '—',
+    // Arabic placeholders
     'اسم_المورد': data.supplierName,
     'الدولة': supplierCountry,
     'المدينة': supplierCity,
@@ -226,64 +235,82 @@ function fillTemplate(
   }
 
   if (data.type === 'payment') {
-    const paymentVars: Record<string, string> = {
-      // English
+    const amountFmt = fmt(data.amount, data.currency)
+    const paidFmt = fmt(data.amountPaid, data.currency)
+    Object.assign(vars, {
       paymentNumber: data.paymentNumber,
       purchaseOrderNumber: data.purchaseOrderNumber ?? '—',
-      amount: fmt(data.amount, data.currency),
-      amountPaid: fmt(data.amountPaid, data.currency),
+      poNumber: data.paymentNumber,
+      amount: amountFmt,
+      amountPaid: paidFmt,
+      totalAmount: amountFmt,
+      value: paidFmt,
       currency: data.currency,
       paymentMethod: paymentMethodLabel(data.paymentMethod, lang),
       paymentDate: data.paymentDate,
+      orderDate: data.paymentDate,
       status: data.status,
       notes: data.notes ?? '',
-      value: fmt(data.amountPaid, data.currency),
-      // Arabic
+      lineItems: data.notes || '—',
+      quantity: '—',
       'رقم_الدفعة': data.paymentNumber,
       'رقم_أمر_الشراء': data.purchaseOrderNumber ?? '—',
-      'المبلغ': fmt(data.amount, data.currency),
-      'المبلغ_المدفوع': fmt(data.amountPaid, data.currency),
+      'رقم_الطلب': data.purchaseOrderNumber ?? data.paymentNumber,
+      'المبلغ': amountFmt,
+      'المبلغ_المدفوع': paidFmt,
+      'الإجمالي': amountFmt,
+      'القيمة': paidFmt,
       'العملة': data.currency,
       'طريقة_الدفع': paymentMethodLabel(data.paymentMethod, lang),
       'تاريخ_الدفع': data.paymentDate,
+      'تاريخ_الطلب': data.paymentDate,
       'الحالة': data.status,
       'ملاحظات': data.notes ?? '',
-      'القيمة': fmt(data.amountPaid, data.currency),
-    }
-    Object.assign(vars, paymentVars)
+      'بنود_الطلب': data.notes || '—',
+      'الكمية': '—',
+    })
   } else {
     const itemsList = data.items
       .map((it, i) => `${i + 1}. ${it.productName} × ${it.quantity} @ ${fmt(it.unitCost, data.currency)} = ${fmt(it.totalCost, data.currency)}`)
       .join('\n')
-
-    const poVars: Record<string, string> = {
-      // English
+    const qty = data.items.reduce((s, i) => s + i.quantity, 0).toString()
+    const totalFmt = fmt(data.totalAmount, data.currency)
+    Object.assign(vars, {
       poNumber: data.poNumber,
+      purchaseOrderNumber: data.poNumber,
+      paymentNumber: '—',
       orderDate: data.orderDate,
       expectedCompletionDate: data.expectedCompletionDate ?? '—',
+      paymentDate: '—',
+      paymentMethod: '—',
       currency: data.currency,
       status: data.status,
       notes: data.notes ?? '',
-      totalAmount: fmt(data.totalAmount, data.currency),
-      value: fmt(data.totalAmount, data.currency),
+      totalAmount: totalFmt,
+      amount: totalFmt,
+      amountPaid: '—',
+      value: totalFmt,
       lineItems: itemsList,
-      quantity: data.items.reduce((s, i) => s + i.quantity, 0).toString(),
-      // Arabic
+      quantity: qty,
       'رقم_الطلب': data.poNumber,
+      'رقم_أمر_الشراء': data.poNumber,
+      'رقم_الدفعة': '—',
       'تاريخ_الطلب': data.orderDate,
       'تاريخ_الإنجاز_المتوقع': data.expectedCompletionDate ?? '—',
+      'تاريخ_الدفع': '—',
+      'طريقة_الدفع': '—',
       'العملة': data.currency,
       'الحالة': data.status,
       'ملاحظات': data.notes ?? '',
-      'الإجمالي': fmt(data.totalAmount, data.currency),
-      'القيمة': fmt(data.totalAmount, data.currency),
+      'الإجمالي': totalFmt,
+      'المبلغ': totalFmt,
+      'المبلغ_المدفوع': '—',
+      'القيمة': totalFmt,
       'بنود_الطلب': itemsList,
-      'الكمية': data.items.reduce((s, i) => s + i.quantity, 0).toString(),
-    }
-    Object.assign(vars, poVars)
+      'الكمية': qty,
+    })
   }
 
-  // Use [^}]+ instead of \w+ so Arabic placeholder keys are captured correctly
   return content.replace(/\{\{([^}]+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`)
 }
 
@@ -294,9 +321,23 @@ function buildTemplateHTML(
   lang: string,
   supplierRecord?: { country: string; city: string; address: string; phones: { label: string; number: string }[]; email: string; code: string } | null
 ): string {
-  const isAr = /[؀-ۿ]/.test(template.templateBody) || lang === 'ar'
+  const isAr = /[\u0600-\u06FF]/.test(template.templateBody) || lang === 'ar'
   const dir = isAr ? 'rtl' : 'ltr'
   const filled = fillTemplate(template.templateBody, data, companyName, lang, supplierRecord)
+
+  if (looksLikeHtml(filled)) {
+    return `<!DOCTYPE html>
+<html dir="${dir}" lang="${lang}">
+<head>
+  <meta charset="UTF-8">
+  <title>${template.templateName}</title>
+</head>
+<body style="margin:0;background:#fff;">
+${filled}
+</body>
+</html>`
+  }
+
   const lines = filled.split('\n').map(line => {
     if (line.startsWith('━')) return '<hr style="border:none;border-top:1px solid #ccc;margin:8px 0;">'
     return `<p style="min-height:1.2em;white-space:pre-wrap;">${line || ' '}</p>`
@@ -364,6 +405,11 @@ export function ReceiptPrintModal({ data, onClose }: Props) {
   // (e.g. {{الدولة}}, {{الهاتف}}) can be filled with real data.
   const activeSupplier = suppliers.find(s => s.name === data.supplierName) ?? null
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
+  const preferredKind = data.type === 'payment' ? 'payment' : 'buying'
+  const sortedTemplates = [...supplierTemplates].sort((a, b) => {
+    const score = (t: typeof a) => (t.kind === preferredKind ? 0 : t.systemKey ? 1 : 2)
+    return score(a) - score(b) || a.templateName.localeCompare(b.templateName)
+  })
   const [mode, setMode] = useState<'choose' | 'direct' | 'template'>('choose')
 
   const printLabel = data.type === 'payment'
@@ -386,7 +432,7 @@ export function ReceiptPrintModal({ data, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2.5">
@@ -448,7 +494,7 @@ export function ReceiptPrintModal({ data, onClose }: Props) {
               </div>
             </div>
 
-            {supplierTemplates.length === 0 ? (
+            {sortedTemplates.length === 0 ? (
               <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg px-3 py-2 space-y-2">
                 <p>
                   {isAr
@@ -468,11 +514,13 @@ export function ReceiptPrintModal({ data, onClose }: Props) {
                   <select
                     value={selectedTemplateId}
                     onChange={e => setSelectedTemplateId(e.target.value)}
-                    className="w-full appearance-none px-3 py-2 pe-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className="w-full appearance-none px-3 py-2.5 pe-8 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-base sm:text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   >
                     <option value="">{isAr ? 'اختر قالباً...' : 'Choisir un modèle...'}</option>
-                    {supplierTemplates.map(t => (
-                      <option key={t.id} value={t.id}>{t.templateName}</option>
+                    {sortedTemplates.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.templateName}{t.systemKey ? (isAr ? ' · مدمج' : ' · Intégré') : ''}
+                      </option>
                     ))}
                   </select>
                   <ChevronDown className="absolute end-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
@@ -480,7 +528,7 @@ export function ReceiptPrintModal({ data, onClose }: Props) {
                 <button
                   onClick={handleTemplatePrint}
                   disabled={!selectedTemplateId}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
+                  className="min-h-11 px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   {isAr ? 'طباعة' : 'Imprimer'}

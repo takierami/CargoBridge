@@ -1,7 +1,9 @@
 from datetime import date
 from decimal import Decimal
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -14,9 +16,9 @@ class SupplierStatementTests(TestCase):
     def setUp(self):
         self.org = Organization.objects.create(name='Statement Org')
         self.china = User.objects.create_user(username='stmt_china', password='StrongPass1!')
-        UserProfile.objects.create(user=self.china, organization=self.org, role='china_admin')
+        UserProfile.objects.create(user=self.china, organization=self.org, role='admin', office='china')
         self.algeria = User.objects.create_user(username='stmt_algeria', password='StrongPass1!')
-        UserProfile.objects.create(user=self.algeria, organization=self.org, role='algeria_admin')
+        UserProfile.objects.create(user=self.algeria, organization=self.org, role='admin', office='algeria')
         Currency.objects.create(
             organization=self.org,
             code='USD',

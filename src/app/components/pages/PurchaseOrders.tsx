@@ -17,11 +17,13 @@ import {
   currencyOptionLabel,
   currencySymbol,
 } from '../../../lib/currencies'
+import { ResponsiveDataList } from '../ui/ResponsiveDataList'
+import { TOUCH_ICON_BTN } from '../ui/responsive'
 
 const PO_STATUSES: POStatus[] = ['draft', 'sent', 'confirmed', 'in_production', 'ready', 'shipped', 'received', 'cancelled']
 
 interface POFormItem {
-  id?: string
+  id: string
   productName: string
   quantity: number
   unitCost: number
@@ -40,7 +42,14 @@ interface POFormData {
 }
 
 function emptyLineItem(): POFormItem {
-  return { productName: '', quantity: 1, unitCost: 0, isCustom: true, selectedProduct: '' }
+  return {
+    id: crypto.randomUUID(),
+    productName: '',
+    quantity: 1,
+    unitCost: 0,
+    isCustom: true,
+    selectedProduct: '',
+  }
 }
 
 export function PurchaseOrderForm({
@@ -89,7 +98,7 @@ export function PurchaseOrderForm({
   const [items, setItems] = useState<POFormItem[]>(() => {
     if (initial?.items && initial.items.length > 0) {
       return initial.items.map(item => ({
-        id: item.id,
+        id: item.id || crypto.randomUUID(),
         productName: item.productName,
         quantity: item.quantity,
         unitCost: item.unitCost,
@@ -344,15 +353,17 @@ export function PurchaseOrderForm({
             ) : (
               <div className="space-y-3 max-h-[35vh] overflow-y-auto pr-1">
                 {items.map((item, idx) => (
-                  <div key={idx} className="grid grid-cols-12 gap-3 items-start border-b border-gray-50 dark:border-gray-700/50 pb-3 last:border-0 last:pb-0">
-                    {/* Product picker + name */}
-                    <div className="col-span-12 md:col-span-5 space-y-1">
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-gray-100 dark:border-gray-700 p-3 space-y-3 md:grid md:grid-cols-12 md:gap-3 md:items-start md:space-y-0 md:rounded-none md:border-0 md:border-b md:border-gray-50 dark:md:border-gray-700/50 md:p-0 md:pb-3 last:md:border-0 last:md:pb-0"
+                  >
+                    <div className="md:col-span-5 space-y-1">
                       <label className="block text-xs font-medium text-gray-500 md:hidden">{t('suppliers.productName')}</label>
                       {availableProducts.length > 0 && (
                         <select
                           value={item.selectedProduct || ''}
                           onChange={e => selectProduct(idx, e.target.value)}
-                          className="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500"
+                          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">{language === 'ar' ? 'منتج مخصص / اختر من الكتالوج' : 'Personnalisé / catalogue'}</option>
                           {availableProducts.map(p => (
@@ -367,49 +378,47 @@ export function PurchaseOrderForm({
                         placeholder={language === 'ar' ? 'اسم المنتج' : 'Nom du produit'}
                         value={item.productName}
                         onChange={e => updateItem(idx, 'productName', e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 font-medium"
+                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500 font-medium"
                       />
                     </div>
 
-                    {/* Quantity */}
-                    <div className="col-span-4 md:col-span-2">
-                      <label className="block text-xs font-medium text-gray-500 md:hidden">{t('suppliers.quantity')}</label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={e => updateItem(idx, 'quantity', Math.max(1, Number(e.target.value)))}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 font-mono text-center"
-                      />
+                    <div className="grid grid-cols-2 gap-3 md:contents">
+                      <div className="md:col-span-2">
+                        <label className="block text-xs font-medium text-gray-500 md:hidden">{t('suppliers.quantity')}</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={e => updateItem(idx, 'quantity', Math.max(1, Number(e.target.value)))}
+                          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500 font-mono text-center"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-xs font-medium text-gray-500 md:hidden">{t('suppliers.unitCost')}</label>
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={item.unitCost || ''}
+                          onChange={e => updateItem(idx, 'unitCost', Math.max(0, Number(e.target.value)))}
+                          placeholder="0.00"
+                          className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500 font-mono text-end"
+                        />
+                      </div>
                     </div>
 
-                    {/* Unit Cost */}
-                    <div className="col-span-4 md:col-span-2">
-                      <label className="block text-xs font-medium text-gray-500 md:hidden">{t('suppliers.unitCost')}</label>
-                      <input
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        value={item.unitCost || ''}
-                        onChange={e => updateItem(idx, 'unitCost', Math.max(0, Number(e.target.value)))}
-                        placeholder="0.00"
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 font-mono text-end"
-                      />
+                    <div className="flex items-center justify-between md:col-span-2 md:block md:text-end md:self-center font-mono text-sm text-gray-900 dark:text-white md:pr-2">
+                      <label className="text-xs font-medium text-gray-500 md:hidden">{t('common.total')}</label>
+                      <span>{formatItemCurrency(item.quantity * item.unitCost)}</span>
                     </div>
 
-                    {/* Total Cost */}
-                    <div className="col-span-3 md:col-span-2 text-end self-center font-mono text-xs text-gray-900 dark:text-white pr-2">
-                      <label className="block text-xs font-medium text-gray-500 md:hidden mb-1">{t('common.total')}</label>
-                      {formatItemCurrency(item.quantity * item.unitCost)}
-                    </div>
-
-                    {/* Delete Action */}
-                    <div className="col-span-1 text-center self-center">
+                    <div className="flex justify-end md:col-span-1 md:text-center md:self-center md:justify-center">
                       <button
                         type="button"
                         onClick={() => removeItem(idx)}
                         disabled={items.length === 1}
-                        className="p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg disabled:opacity-30 disabled:hover:bg-transparent"
+                        className="min-h-11 min-w-11 inline-flex items-center justify-center text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg disabled:opacity-30 disabled:hover:bg-transparent"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -492,6 +501,7 @@ export function PurchaseOrderForm({
             try {
               const created = await addSupplierProduct({ ...data, supplierId })
               setItems(prev => [...prev, {
+                id: crypto.randomUUID(),
                 productName: created.name,
                 quantity: 1,
                 unitCost: created.unitCost,
@@ -569,7 +579,6 @@ export function PurchaseOrders() {
       return
     }
     const itemsToSave = data.items.map(item => ({
-      id: item.id,
       productName: item.productName,
       quantity: item.quantity,
       unitCost: item.unitCost,
@@ -725,11 +734,11 @@ export function PurchaseOrders() {
     <div className="p-4 lg:p-6 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('suppliers.purchaseOrders')}</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{t('suppliers.purchaseOrders')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} {t('common.records')}</p>
         </div>
         {isOrgAdmin(role) && (
-          <button onClick={() => { setEditItem(null); setShowForm(true) }} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+          <button onClick={() => { setEditItem(null); setShowForm(true) }} className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
             <Plus className="w-4 h-4" /> {t('suppliers.addPurchaseOrder')}
           </button>
         )}
@@ -739,13 +748,13 @@ export function PurchaseOrders() {
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-48">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('suppliers.searchPlaceholder')} className="w-full ps-9 pe-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('suppliers.searchPlaceholder')} className="w-full ps-9 pe-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-base sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
           </div>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:ring-2 focus:ring-blue-500">
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="min-h-11 px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-base sm:text-sm focus:ring-2 focus:ring-blue-500">
             <option value="all">{t('common.all')}</option>
             {PO_STATUSES.map(s => <option key={s} value={s}>{t('suppliers.poStatuses.' + s)}</option>)}
           </select>
-          <select value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:ring-2 focus:ring-blue-500">
+          <select value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)} className="min-h-11 px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-base sm:text-sm focus:ring-2 focus:ring-blue-500">
             <option value="all">{t('suppliers.selectSupplier')}</option>
             {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
@@ -764,43 +773,70 @@ export function PurchaseOrders() {
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-500 dark:text-gray-400"><p>{t('suppliers.noPurchaseOrders')}</p></div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-900/50">
-              <tr>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.poNumber')}</th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.supplierName')}</th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.orderDate')}</th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.expectedCompletionDate')}</th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.status')}</th>
-                <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('suppliers.totalAmount')}</th>
-                <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {filtered.map(po => (
-                <tr key={po.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                  <td className="px-5 py-4 text-sm font-mono text-blue-600 dark:text-blue-400">{po.poNumber}</td>
-                  <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">{getSupplierName(po.supplierId)}</td>
-                  <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{po.orderDate}</td>
-                  <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{po.expectedCompletionDate || '—'}</td>
-                  <td className="px-5 py-4"><span className={cn('px-2.5 py-1 rounded-full text-xs font-medium', statusColor(po.status))}>{t('suppliers.poStatuses.' + po.status)}</span></td>
-                  <td className="px-5 py-4 text-end text-sm font-mono text-gray-900 dark:text-white">{formatCurrency(po.totalAmount, po.currency)}</td>
-                  <td className="px-5 py-4 text-end">
-                    <div className="flex items-center justify-end gap-1">
-                      {isOrgAdmin(role) && (
-                        <>
-                          <button onClick={() => navigate('/suppliers/purchase-orders/' + po.id)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg" title={t('common.edit') || 'Edit'}><Pencil className="w-3.5 h-3.5" /></button>
-                          <button onClick={() => handleDelete(po.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg" title={t('common.delete') || 'Delete'}><Trash2 className="w-3.5 h-3.5" /></button>
-                        </>
-                      )}
-                    </div>
-                  </td>
+        <ResponsiveDataList
+          rows={filtered}
+          keyField={(po) => po.id}
+          table={(
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-900/50">
+                <tr>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.poNumber')}</th>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.supplierName')}</th>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.orderDate')}</th>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.expectedCompletionDate')}</th>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.status')}</th>
+                  <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('suppliers.totalAmount')}</th>
+                  <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {filtered.map(po => (
+                  <tr key={po.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                    <td className="px-5 py-4 text-sm font-mono text-blue-600 dark:text-blue-400">{po.poNumber}</td>
+                    <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">{getSupplierName(po.supplierId)}</td>
+                    <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{po.orderDate}</td>
+                    <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{po.expectedCompletionDate || '—'}</td>
+                    <td className="px-5 py-4"><span className={cn('px-2.5 py-1 rounded-full text-xs font-medium', statusColor(po.status))}>{t('suppliers.poStatuses.' + po.status)}</span></td>
+                    <td className="px-5 py-4 text-end text-sm font-mono text-gray-900 dark:text-white">{formatCurrency(po.totalAmount, po.currency)}</td>
+                    <td className="px-5 py-4 text-end">
+                      <div className="flex items-center justify-end gap-1">
+                        {isOrgAdmin(role) && (
+                          <>
+                            <button type="button" onClick={() => navigate('/suppliers/purchase-orders/' + po.id)} className={cn(TOUCH_ICON_BTN, 'text-blue-500')} title={t('common.edit')}><Pencil className="w-4 h-4" /></button>
+                            <button type="button" onClick={() => handleDelete(po.id)} className={cn(TOUCH_ICON_BTN, 'text-red-500')} title={t('common.delete')}><Trash2 className="w-4 h-4" /></button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          renderCard={(po) => (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">{po.poNumber}</p>
+                  <p className="mt-0.5 truncate text-sm text-gray-900 dark:text-white">{getSupplierName(po.supplierId)}</p>
+                  <p className="mt-1 text-xs text-gray-500">{po.orderDate} → {po.expectedCompletionDate || '—'}</p>
+                </div>
+                <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-medium', statusColor(po.status))}>
+                  {t('suppliers.poStatuses.' + po.status)}
+                </span>
+              </div>
+              <div className="mt-3 flex items-center justify-between">
+                <p className="font-mono text-base font-semibold text-gray-900 dark:text-white">{formatCurrency(po.totalAmount, po.currency)}</p>
+                {isOrgAdmin(role) && (
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => navigate('/suppliers/purchase-orders/' + po.id)} className={cn(TOUCH_ICON_BTN, 'text-blue-500')}><Pencil className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => handleDelete(po.id)} className={cn(TOUCH_ICON_BTN, 'text-red-500')}><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        />
       )}
 
       {showForm && (

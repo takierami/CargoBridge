@@ -287,30 +287,30 @@ export function ReceiptModal({ goods, agent, defaultType = 'reception', onClose 
     )
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl">
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 sm:p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
 
         {/* Modal header — follows APP direction, not document direction */}
-        <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
-          <div>
+        <div className="flex shrink-0 items-center justify-between p-4 sm:p-5 border-b border-gray-200 dark:border-gray-700">
+          <div className="min-w-0">
             <h2 className="font-bold text-gray-900 dark:text-white">{t('receipts.preview')}</h2>
-            <p className="text-xs text-gray-500 mt-0.5 font-mono" dir="ltr">{goods.trackingNumber}</p>
+            <p className="text-xs text-gray-500 mt-0.5 font-mono truncate" dir="ltr">{goods.trackingNumber}</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500">
+          <button type="button" onClick={onClose} className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Controls */}
-        <div className="flex flex-wrap items-center gap-3 px-5 py-3 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-          {/* Type tabs */}
-          <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+        {/* Controls — stack on phone */}
+        <div className="shrink-0 flex flex-col gap-3 px-4 py-3 sm:px-5 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex w-full overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-600 sm:w-auto">
             {TYPES.map(tp => (
               <button
                 key={tp}
+                type="button"
                 onClick={() => setSelectedType(tp)}
                 className={cn(
-                  'px-3 py-1.5 text-xs font-medium transition-colors',
+                  'min-h-11 flex-1 px-3 py-2 text-sm font-medium transition-colors whitespace-nowrap sm:flex-none sm:text-xs sm:py-1.5',
                   selectedType === tp
                     ? 'bg-blue-600 text-white'
                     : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50'
@@ -321,12 +321,11 @@ export function ReceiptModal({ goods, agent, defaultType = 'reception', onClose 
             ))}
           </div>
 
-          {/* Template selector */}
-          <div className="relative">
+          <div className="relative w-full sm:w-auto sm:min-w-[12rem]">
             <select
               value={selectedTemplateId || activeTemplate?.id || ''}
               onChange={e => setSelectedTemplateId(e.target.value)}
-              className="appearance-none ps-3 pe-8 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full appearance-none ps-3 pe-8 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-base sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               {typeTemplates.length === 0
                 ? <option value="">{t('receipts.noTemplate')}</option>
@@ -340,21 +339,23 @@ export function ReceiptModal({ goods, agent, defaultType = 'reception', onClose 
             <ChevronDown className="absolute end-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
           </div>
 
-          <div className="ms-auto flex gap-2">
+          <div className="hidden sm:ms-auto sm:flex gap-2">
             <button
+              type="button"
               onClick={handlePrint}
               disabled={!activeTemplate}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-800 dark:bg-gray-700 hover:bg-gray-700 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-colors"
+              className="flex min-h-11 items-center gap-1.5 px-3 py-2 bg-gray-800 dark:bg-gray-700 hover:bg-gray-700 text-white rounded-lg text-sm font-medium disabled:opacity-40 transition-colors"
             >
-              <Printer className="w-3.5 h-3.5" />
+              <Printer className="w-4 h-4" />
               {t('receipts.print')}
             </button>
             <button
+              type="button"
               onClick={handleDownload}
               disabled={!activeTemplate}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium disabled:opacity-40 transition-colors"
+              className="flex min-h-11 items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-40 transition-colors"
             >
-              <FileDown className="w-3.5 h-3.5" />
+              <FileDown className="w-4 h-4" />
               {t('receipts.downloadPdf')}
             </button>
           </div>
@@ -466,6 +467,28 @@ export function ReceiptModal({ goods, agent, defaultType = 'reception', onClose 
 
             </div>
           )}
+        </div>
+
+        {/* Sticky mobile actions */}
+        <div className="shrink-0 flex gap-2 p-3 border-t border-gray-200 dark:border-gray-700 sm:hidden pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={handlePrint}
+            disabled={!activeTemplate}
+            className="flex-1 min-h-11 inline-flex items-center justify-center gap-1.5 bg-gray-800 text-white rounded-lg text-sm font-medium disabled:opacity-40"
+          >
+            <Printer className="w-4 h-4" />
+            {t('receipts.print')}
+          </button>
+          <button
+            type="button"
+            onClick={handleDownload}
+            disabled={!activeTemplate}
+            className="flex-1 min-h-11 inline-flex items-center justify-center gap-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-40"
+          >
+            <FileDown className="w-4 h-4" />
+            {t('receipts.downloadPdf')}
+          </button>
         </div>
       </div>
     </div>

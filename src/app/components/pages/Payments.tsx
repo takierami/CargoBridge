@@ -17,6 +17,8 @@ import {
 import { SupplierQuickCreate } from '../quick-create/SupplierQuickCreate'
 import { CurrencyQuickCreate } from '../quick-create/CurrencyQuickCreate'
 import { PurchaseOrderForm } from './PurchaseOrders'
+import { ResponsiveDataList } from '../ui/ResponsiveDataList'
+import { TOUCH_ICON_BTN } from '../ui/responsive'
 
 const PAYMENT_METHODS: PaymentMethod[] = ['bank_transfer', 'cash', 'wise', 'western_union', 'paypal', 'other']
 const PAYMENT_STATUSES: PaymentStatus[] = ['pending', 'partially_paid', 'fully_paid', 'overdue']
@@ -252,7 +254,7 @@ export function PaymentForm({ initial, onSave, onCancel, t, language, suppliers,
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.amount')} *</label>
               <input
@@ -265,7 +267,7 @@ export function PaymentForm({ initial, onSave, onCancel, t, language, suppliers,
                   const paid = form.amountPaid === form.amount || form.amountPaid === 0 ? val : form.amountPaid
                   updateAmountFields(val, paid)
                 }}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -276,12 +278,12 @@ export function PaymentForm({ initial, onSave, onCancel, t, language, suppliers,
                 step="0.01"
                 value={form.amountPaid || ''}
                 onChange={e => updateAmountFields(form.amount, Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.selectCurrency')}</label>
               <div className="flex gap-2">
@@ -289,7 +291,7 @@ export function PaymentForm({ initial, onSave, onCancel, t, language, suppliers,
                   key={currencyListTick}
                   value={form.currency}
                   onChange={e => set('currency', e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500"
                 >
                   {currenciesForSelect(form.currency).map(c => (
                     <option key={c.code} value={c.code}>
@@ -302,7 +304,7 @@ export function PaymentForm({ initial, onSave, onCancel, t, language, suppliers,
                     type="button"
                     onClick={() => setShowCurrencyQuick(true)}
                     title={t('common.addNew')}
-                    className="shrink-0 px-2.5 py-2 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                    className="shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -311,20 +313,20 @@ export function PaymentForm({ initial, onSave, onCancel, t, language, suppliers,
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.paymentMethod')}</label>
-              <select value={form.paymentMethod} onChange={e => set('paymentMethod', e.target.value as PaymentMethod)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
+              <select value={form.paymentMethod} onChange={e => set('paymentMethod', e.target.value as PaymentMethod)} className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500">
                 {PAYMENT_METHODS.map(m => <option key={m} value={m}>{t('suppliers.paymentMethods.' + m)}</option>)}
               </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.paymentDate')}</label>
-              <input type="date" value={form.paymentDate} onChange={e => set('paymentDate', e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+              <input type="date" value={form.paymentDate} onChange={e => set('paymentDate', e.target.value)} className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common.status')}</label>
-              <select value={form.status} onChange={e => set('status', e.target.value as PaymentStatus)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
+              <select value={form.status} onChange={e => set('status', e.target.value as PaymentStatus)} className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500">
                 {PAYMENT_STATUSES.map(s => <option key={s} value={s}>{t('suppliers.paymentStatuses.' + s)}</option>)}
               </select>
             </div>
@@ -332,7 +334,7 @@ export function PaymentForm({ initial, onSave, onCancel, t, language, suppliers,
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common.notes')}</label>
-            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 resize-none" />
+            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2} className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500 resize-none" />
           </div>
         </div>
         <div className="flex flex-wrap gap-3 p-5 border-t border-gray-200 dark:border-gray-700">
@@ -594,11 +596,11 @@ export function Payments() {
     <div className="p-4 lg:p-6 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('suppliers.payments')}</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{t('suppliers.payments')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} {t('common.records')}</p>
         </div>
         {canManagePayments && (
-          <button onClick={() => { setEditItem(null); setShowForm(true) }} className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+          <button onClick={() => { setEditItem(null); setShowForm(true) }} className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
             <Plus className="w-4 h-4" /> {t('suppliers.addPayment')}
           </button>
         )}
@@ -608,13 +610,13 @@ export function Payments() {
         <div className="flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-48">
             <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('suppliers.searchPlaceholder')} className="w-full ps-9 pe-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t('suppliers.searchPlaceholder')} className="w-full ps-9 pe-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-base sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
           </div>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:ring-2 focus:ring-blue-500">
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="min-h-11 px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-base sm:text-sm focus:ring-2 focus:ring-blue-500">
             <option value="all">{t('common.all')}</option>
             {PAYMENT_STATUSES.map(s => <option key={s} value={s}>{t('suppliers.paymentStatuses.' + s)}</option>)}
           </select>
-          <select value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)} className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:ring-2 focus:ring-blue-500">
+          <select value={supplierFilter} onChange={e => setSupplierFilter(e.target.value)} className="min-h-11 px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-base sm:text-sm focus:ring-2 focus:ring-blue-500">
             <option value="all">{t('suppliers.selectSupplier')}</option>
             {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
@@ -633,54 +635,93 @@ export function Payments() {
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-500 dark:text-gray-400"><p>{t('common.noData')}</p></div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-900/50">
-              <tr>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.paymentNumber')}</th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.supplierName')}</th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.linkedPO')}</th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.amount')}</th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.paymentMethod')}</th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.paymentDate')}</th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.status')}</th>
-                <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {filtered.map(p => (
-                <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                  <td className="px-5 py-4 text-sm font-mono text-blue-600 dark:text-blue-400">{p.paymentNumber}</td>
-                  <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">{getSupplierName(p.supplierId)}</td>
-                  <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{getPONumber(p.purchaseOrderId)}</td>
-                  <td className="px-5 py-4 text-end text-sm font-mono text-gray-900 dark:text-white">{formatCurrency(p.amount, p.currency)}</td>
-                  <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{t('suppliers.paymentMethods.' + p.paymentMethod)}</td>
-                  <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{p.paymentDate}</td>
-                  <td className="px-5 py-4"><span className={cn('px-2.5 py-1 rounded-full text-xs font-medium', statusColor(p.status))}>{t('suppliers.paymentStatuses.' + p.status)}</span></td>
-                  <td className="px-5 py-4 text-end">
-                    <div className="flex items-center justify-end gap-1">
-                      {canManagePayments && (p.status === 'pending' || p.status === 'partially_paid' || p.status === 'overdue') && (
-                        <button onClick={(e) => handleMarkAsPaid(p.id, e)} className="p-1.5 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg" title={t('suppliers.markAsFullyPaid')}>
-                          <CheckCircle className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                      {canManagePayments && (
-                        <>
-                          <button onClick={() => navigate('/suppliers/payments/' + p.id)} className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg">
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleDelete(p.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
+        <ResponsiveDataList
+          rows={filtered}
+          keyField={(p) => p.id}
+          table={(
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-900/50">
+                <tr>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.paymentNumber')}</th>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.supplierName')}</th>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.linkedPO')}</th>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.amount')}</th>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.paymentMethod')}</th>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.paymentDate')}</th>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.status')}</th>
+                  <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {filtered.map(p => (
+                  <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                    <td className="px-5 py-4 text-sm font-mono text-blue-600 dark:text-blue-400">{p.paymentNumber}</td>
+                    <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">{getSupplierName(p.supplierId)}</td>
+                    <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{getPONumber(p.purchaseOrderId)}</td>
+                    <td className="px-5 py-4 text-end text-sm font-mono text-gray-900 dark:text-white">{formatCurrency(p.amount, p.currency)}</td>
+                    <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{t('suppliers.paymentMethods.' + p.paymentMethod)}</td>
+                    <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{p.paymentDate}</td>
+                    <td className="px-5 py-4"><span className={cn('px-2.5 py-1 rounded-full text-xs font-medium', statusColor(p.status))}>{t('suppliers.paymentStatuses.' + p.status)}</span></td>
+                    <td className="px-5 py-4 text-end">
+                      <div className="flex items-center justify-end gap-1">
+                        {canManagePayments && (p.status === 'pending' || p.status === 'partially_paid' || p.status === 'overdue') && (
+                          <button type="button" onClick={(e) => handleMarkAsPaid(p.id, e)} className={cn(TOUCH_ICON_BTN, 'text-green-500')} title={t('suppliers.markAsFullyPaid')}>
+                            <CheckCircle className="w-4 h-4" />
+                          </button>
+                        )}
+                        {canManagePayments && (
+                          <>
+                            <button type="button" onClick={() => navigate('/suppliers/payments/' + p.id)} className={cn(TOUCH_ICON_BTN, 'text-blue-500')}>
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button type="button" onClick={() => handleDelete(p.id)} className={cn(TOUCH_ICON_BTN, 'text-red-500')}>
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          renderCard={(p) => (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-mono text-sm font-semibold text-blue-600 dark:text-blue-400">{p.paymentNumber}</p>
+                  <p className="mt-0.5 truncate text-sm text-gray-900 dark:text-white">{getSupplierName(p.supplierId)}</p>
+                  <p className="mt-1 text-xs text-gray-500">{getPONumber(p.purchaseOrderId)} · {p.paymentDate}</p>
+                </div>
+                <span className={cn('shrink-0 rounded-full px-2.5 py-1 text-xs font-medium', statusColor(p.status))}>
+                  {t('suppliers.paymentStatuses.' + p.status)}
+                </span>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <div>
+                  <p className="font-mono text-base font-semibold text-gray-900 dark:text-white">{formatCurrency(p.amount, p.currency)}</p>
+                  <p className="text-xs text-gray-500">{t('suppliers.paymentMethods.' + p.paymentMethod)}</p>
+                </div>
+                {canManagePayments && (
+                  <div className="flex gap-1">
+                    {(p.status === 'pending' || p.status === 'partially_paid' || p.status === 'overdue') && (
+                      <button type="button" onClick={(e) => handleMarkAsPaid(p.id, e)} className={cn(TOUCH_ICON_BTN, 'text-green-500')}>
+                        <CheckCircle className="w-4 h-4" />
+                      </button>
+                    )}
+                    <button type="button" onClick={() => navigate('/suppliers/payments/' + p.id)} className={cn(TOUCH_ICON_BTN, 'text-blue-500')}>
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button type="button" onClick={() => handleDelete(p.id)} className={cn(TOUCH_ICON_BTN, 'text-red-500')}>
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        />
       )}
 
       {showForm && (

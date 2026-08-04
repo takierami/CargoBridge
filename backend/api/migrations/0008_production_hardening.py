@@ -1,5 +1,6 @@
 # Generated manually for production audit fixes
 
+from django.conf import settings
 from django.db import migrations, models
 import django.db.models.deletion
 
@@ -20,7 +21,7 @@ def clamp_overpaid_payments(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('auth', '0012_alter_user_first_name_max_length'),
+        migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ('api', '0007_warehouse_status'),
     ]
 
@@ -38,7 +39,7 @@ class Migration(migrations.Migration):
                 null=True,
                 on_delete=django.db.models.deletion.SET_NULL,
                 related_name='deleted_suppliers',
-                to='auth.user',
+                to=settings.AUTH_USER_MODEL,
             ),
         ),
         migrations.AddField(
@@ -59,7 +60,7 @@ class Migration(migrations.Migration):
                 null=True,
                 on_delete=django.db.models.deletion.SET_NULL,
                 related_name='deleted_supplier_documents',
-                to='auth.user',
+                to=settings.AUTH_USER_MODEL,
             ),
         ),
         migrations.AddField(

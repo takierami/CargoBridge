@@ -1,21 +1,23 @@
 """
-Provision a CargoBridge user (login-only product — no public register).
+Provision a CargoBridge user.
 
 Examples:
-  python manage.py create_user --username china --email china@example.com \\
-    --password 'StrongPass1!' --role china_admin --org-name "CargoBridge"
+  python manage.py create_user --username owner --email owner@example.com \\
+    --password 'StrongPass1!' --role owner --office china --org-name "Acme Trading"
 
-  python manage.py create_user --username algeria --email algeria@example.com \\
-    --password 'StrongPass1!' --role algeria_admin --org-id <uuid>
+  python manage.py create_user --username emp --email emp@example.com \\
+    --password 'StrongPass1!' --role employee --office algeria --org-id <uuid>
+
+Legacy --role china_admin / algeria_admin still accepted (mapped to admin + office).
 """
 from django.core.management.base import BaseCommand, CommandError
 
-from accounts.models import Organization
+from accounts.models import Organization, UserProfile
 from accounts.serializers import RegisterSerializer
 
 
 class Command(BaseCommand):
-    help = 'Create a user (and optionally a new organization) for CargoBridge login.'
+    help = 'Create a user (and optionally a new organization) for CargoBridge.'
 
     def add_arguments(self, parser):
         parser.add_argument('--username', required=True)
@@ -23,12 +25,22 @@ class Command(BaseCommand):
         parser.add_argument('--password', required=True)
         parser.add_argument(
             '--role',
-            choices=['china_admin', 'algeria_admin'],
-            default='china_admin',
+            default=UserProfile.ROLE_ADMIN,
+            help='owner|admin|manager|employee|readonly (or legacy china_admin|algeria_admin)',
+        )
+        parser.add_argument(
+            '--office',
+            choices=[c[0] for c in UserProfile.OFFICE_CHOICES],
+            default=UserProfile.OFFICE_CHINA,
         )
         parser.add_argument('--org-name', dest='org_name', default='')
         parser.add_argument('--org-name-fr', dest='org_name_fr', default='')
         parser.add_argument('--org-id', dest='org_id', default='')
+        parser.add_argument(
+            '--demo',
+            action='store_true',
+            help='When creating a new org, also seed demo agents/goods.',
+        )
 
     def handle(self, *args, **options):
         data = {
@@ -36,6 +48,7 @@ class Command(BaseCommand):
             'email': options['email'],
             'password': options['password'],
             'role': options['role'],
+            'office': options['office'],
             'company_name': options['org_name'],
             'company_name_fr': options['org_name_fr'],
         }
@@ -51,6 +64,10 @@ class Command(BaseCommand):
             raise CommandError(str(serializer.errors))
         user = serializer.save()
         org = user.profile.organization
+        if options['demo'] and options['org_name'] and not options['org_id']:
+            from api.management.commands.seed_demo import seed_demo_data
+            seed_demo_data(org)
         self.stdout.write(self.style.SUCCESS(
-            f'Created user {user.username} ({user.profile.role}) in org {org.name} ({org.id})'
+            f'Created user {user.username} ({user.profile.role}/{user.profile.office}) '
+            f'in org {org.name} ({org.id})'
         ))

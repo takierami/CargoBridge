@@ -1,4 +1,6 @@
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -11,10 +13,10 @@ class AgentCreateUniquenessTests(TestCase):
         self.org = Organization.objects.create(name='Agent Org')
         self.other_org = Organization.objects.create(name='Other Org')
         self.user = User.objects.create_user(username='agent_admin', password='StrongPass1!')
-        UserProfile.objects.create(user=self.user, organization=self.org, role='china_admin')
+        UserProfile.objects.create(user=self.user, organization=self.org, role='admin', office='china')
         self.other_user = User.objects.create_user(username='other_admin', password='StrongPass1!')
         UserProfile.objects.create(
-            user=self.other_user, organization=self.other_org, role='china_admin',
+            user=self.other_user, organization=self.other_org, role='admin', office='china',
         )
         self.client = APIClient()
 

@@ -2,7 +2,9 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
@@ -22,9 +24,9 @@ class ProductionHardeningTests(TestCase):
     def setUp(self):
         self.org = Organization.objects.create(name='Prod Org')
         self.china = User.objects.create_user(username='prod_china', password='StrongPass1!')
-        UserProfile.objects.create(user=self.china, organization=self.org, role='china_admin')
+        UserProfile.objects.create(user=self.china, organization=self.org, role='admin', office='china')
         self.algeria = User.objects.create_user(username='prod_algeria', password='StrongPass1!')
-        UserProfile.objects.create(user=self.algeria, organization=self.org, role='algeria_admin')
+        UserProfile.objects.create(user=self.algeria, organization=self.org, role='admin', office='algeria')
         Currency.objects.create(
             organization=self.org,
             code='USD',

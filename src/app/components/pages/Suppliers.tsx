@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router'
-import { Plus, Search, Truck, X, Pencil, Trash2, Eye, Star, FileText, Printer } from 'lucide-react'
+import { Plus, Search, Truck, X, Pencil, Trash2, Eye, Star, FileText, Printer, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
 import { cn } from '../../utils/cn'
@@ -12,13 +12,33 @@ import { DEFAULT_TRANSACTION_CURRENCY, currenciesForSelect, currencySymbol } fro
 const ALL_STATUSES: SupplierStatus[] = ['active', 'inactive', 'suspended', 'blacklisted']
 const ALL_CATEGORIES: SupplierCategory[] = ['shoes', 'clothing', 'electronics', 'furniture', 'accessories', 'other']
 
+/** UI-only phone row; `id` is stripped before API save. */
+type PhoneRow = SupplierPhone & { id: string }
+
+function newPhoneRow(partial?: Partial<SupplierPhone>): PhoneRow {
+  return {
+    id: crypto.randomUUID(),
+    label: partial?.label ?? 'رئيسي',
+    number: partial?.number ?? '',
+  }
+}
+
+function toPhoneRows(phones?: SupplierPhone[]): PhoneRow[] {
+  if (phones?.length) return phones.map(p => newPhoneRow(p))
+  return [newPhoneRow()]
+}
+
+function stripPhoneIds(phones: PhoneRow[]): SupplierPhone[] {
+  return phones.map(({ label, number }) => ({ label, number }))
+}
+
 interface SupplierFormData {
   name: string
   nameFr: string
   country: string
   city: string
   address: string
-  phones: SupplierPhone[]
+  phones: PhoneRow[]
   email: string
   whatsapp: string
   wechat: string
@@ -34,13 +54,16 @@ interface SupplierFormData {
   status: SupplierStatus
 }
 
+/** Payload shape for create/update (phones without UI ids). */
+type SupplierSavePayload = Omit<SupplierFormData, 'phones'> & { phones: SupplierPhone[] }
+
 const EMPTY_SUPPLIER_FORM: SupplierFormData = {
   name: '',
   nameFr: '',
   country: 'الصين',
   city: '',
   address: '',
-  phones: [{ label: 'رئيسي', number: '' }],
+  phones: [newPhoneRow()],
   email: '',
   whatsapp: '',
   wechat: '',
@@ -63,7 +86,7 @@ function supplierFormFromInitial(initial?: Partial<Supplier>): SupplierFormData 
     country: initial?.country || 'الصين',
     city: initial?.city || '',
     address: initial?.address || '',
-    phones: initial?.phones || [{ label: 'رئيسي', number: '' }],
+    phones: toPhoneRows(initial?.phones),
     email: initial?.email || '',
     whatsapp: initial?.whatsapp || '',
     wechat: initial?.wechat || '',
@@ -82,8 +105,8 @@ function supplierFormFromInitial(initial?: Partial<Supplier>): SupplierFormData 
 
 function SupplierForm({ initial, onSave, onSaveAndAddAnother, onCancel, t, categories }: Readonly<{
   initial?: Partial<Supplier>
-  onSave: (data: SupplierFormData) => void | Promise<void>
-  onSaveAndAddAnother?: (data: SupplierFormData) => void | Promise<void>
+  onSave: (data: SupplierSavePayload) => void | Promise<void>
+  onSaveAndAddAnother?: (data: SupplierSavePayload) => void | Promise<void>
   onCancel: () => void
   t: ReturnType<typeof useAppStore>['t']
   categories: { value: SupplierCategory; label: string }[]
@@ -92,7 +115,12 @@ function SupplierForm({ initial, onSave, onSaveAndAddAnother, onCancel, t, categ
 
   const set = (k: keyof SupplierFormData, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
-  const addPhone = () => set('phones', [...form.phones, { label: '', number: '' }])
+  const toSavePayload = (): SupplierSavePayload => ({
+    ...form,
+    phones: stripPhoneIds(form.phones),
+  })
+
+  const addPhone = () => set('phones', [...form.phones, newPhoneRow({ label: '', number: '' })])
   const updatePhone = (i: number, field: 'label' | 'number', value: string) => {
     const phones = [...form.phones]
     phones[i] = { ...phones[i], [field]: value }
@@ -112,7 +140,7 @@ function SupplierForm({ initial, onSave, onSaveAndAddAnother, onCancel, t, categ
       toast.error(t('suppliers.supplierName') + ' *')
       return
     }
-    onSave(form)
+    onSave(toSavePayload())
   }
 
   const handleSaveAndAddAnother = async () => {
@@ -121,8 +149,8 @@ function SupplierForm({ initial, onSave, onSaveAndAddAnother, onCancel, t, categ
       return
     }
     try {
-      await onSaveAndAddAnother(form)
-      setForm({ ...EMPTY_SUPPLIER_FORM, phones: [{ label: 'رئيسي', number: '' }] })
+      await onSaveAndAddAnother(toSavePayload())
+      setForm({ ...EMPTY_SUPPLIER_FORM, phones: [newPhoneRow()] })
     } catch {
       // Parent toasts the error; keep form data for correction
     }
@@ -138,7 +166,7 @@ function SupplierForm({ initial, onSave, onSaveAndAddAnother, onCancel, t, categ
           <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"><X className="w-4 h-4" /></button>
         </div>
         <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.supplierName')} * (عربي)</label>
               <input value={form.name} onChange={e => set('name', e.target.value)}
@@ -151,7 +179,7 @@ function SupplierForm({ initial, onSave, onSaveAndAddAnother, onCancel, t, categ
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.country')}</label>
               <input value={form.country} onChange={e => set('country', e.target.value)}
@@ -174,16 +202,17 @@ function SupplierForm({ initial, onSave, onSaveAndAddAnother, onCancel, t, categ
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.phoneNumbers')}</label>
             <div className="space-y-2">
               {form.phones.map((phone, i) => (
-                <div key={`${phone.label}-${phone.number}-${i}`} className="flex gap-2">
+                <div key={phone.id} className="flex flex-col gap-2 sm:flex-row">
                   <input value={phone.label} onChange={e => updatePhone(i, 'label', e.target.value)}
                     placeholder={t('suppliers.phoneLabel')}
-                    className="w-1/3 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                    className="w-full px-3 py-2.5 text-base sm:text-sm sm:w-1/3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500" />
                   <input value={phone.number} onChange={e => updatePhone(i, 'number', e.target.value)}
+                    type="tel" inputMode="tel" autoComplete="tel"
                     placeholder={t('suppliers.phoneNumber')} dir="ltr"
-                    className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                    className="w-full flex-1 px-3 py-2.5 text-base sm:text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500" />
                   {form.phones.length > 1 && (
-                    <button onClick={() => removePhone(i)} className="px-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
-                      <X className="w-4 h-4" />
+                    <button type="button" onClick={() => removePhone(i)} className="min-h-11 min-w-11 self-end px-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg sm:self-auto">
+                      <X className="w-4 h-4 mx-auto" />
                     </button>
                   )}
                 </div>
@@ -194,20 +223,20 @@ function SupplierForm({ initial, onSave, onSaveAndAddAnother, onCancel, t, categ
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.email')}</label>
               <input value={form.email} onChange={e => set('email', e.target.value)} type="email" dir="ltr"
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-base sm:text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.whatsapp')}</label>
-              <input value={form.whatsapp} onChange={e => set('whatsapp', e.target.value)} dir="ltr"
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+              <input value={form.whatsapp} onChange={e => set('whatsapp', e.target.value)} type="tel" inputMode="tel" dir="ltr"
+                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-base sm:text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.wechat')}</label>
               <input value={form.wechat} onChange={e => set('wechat', e.target.value)} dir="ltr"
@@ -220,7 +249,7 @@ function SupplierForm({ initial, onSave, onSaveAndAddAnother, onCancel, t, categ
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.primaryContact')}</label>
               <input value={form.primaryContact} onChange={e => set('primaryContact', e.target.value)}
@@ -250,7 +279,7 @@ function SupplierForm({ initial, onSave, onSaveAndAddAnother, onCancel, t, categ
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.leadTimeDays')}</label>
               <input type="number" min="1" value={form.leadTimeDays} onChange={e => set('leadTimeDays', Number(e.target.value))}
@@ -355,13 +384,22 @@ const SUPPLIER_TEMPLATE_PLACEHOLDERS = [
 function mergeSupplierTemplate(body: string, supplier: Supplier, language: 'ar' | 'fr') {
   const locale = language === 'ar' ? 'ar-DZ' : 'fr-FR'
   const phone = supplier.phones[0]?.number || '—'
-  
+  const today = new Date().toLocaleDateString(locale)
+
   const currency = supplier.preferredCurrency || DEFAULT_TRANSACTION_CURRENCY
   const symbol = currencySymbol(currency)
   const mockAmount = 150000
   const formattedMockAmount = `${symbol} ${mockAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const values: Record<string, string> = {
+    supplierName: supplier.name,
+    address: supplier.address || '—',
+    city: supplier.city || '—',
+    phone,
+    email: supplier.email || '—',
+    imageNumber: supplier.code || '—',
+    todayDate: today,
+    status: language === 'ar' ? 'نشط' : 'Actif',
     'اسم_المورد': supplier.name,
     'الدولة': supplier.country,
     'المدينة': supplier.city,
@@ -369,49 +407,64 @@ function mergeSupplierTemplate(body: string, supplier: Supplier, language: 'ar' 
     'الهاتف': phone,
     'البريد_الإلكتروني': supplier.email || '—',
     'رقم_المورد': supplier.code,
-    'تاريخ_اليوم': new Date().toLocaleDateString(locale),
-    
-    // Price / Amount placeholders
+    'تاريخ_اليوم': today,
     'القيمة': formattedMockAmount,
-    'value': formattedMockAmount,
+    value: formattedMockAmount,
     'المبلغ': formattedMockAmount,
-    'amount': formattedMockAmount,
+    amount: formattedMockAmount,
     'المبلغ_المدفوع': formattedMockAmount,
-    'amountPaid': formattedMockAmount,
+    amountPaid: formattedMockAmount,
     'الإجمالي': formattedMockAmount,
-    'totalAmount': formattedMockAmount,
-    
-    // Transaction Context
+    totalAmount: formattedMockAmount,
     'رقم_الطلب': 'PO-2026-001',
-    'poNumber': 'PO-2026-001',
+    poNumber: 'PO-2026-001',
     'رقم_الدفعة': 'PAY-2026-001',
-    'paymentNumber': 'PAY-2026-001',
+    paymentNumber: 'PAY-2026-001',
     'رقم_أمر_الشراء': 'PO-2026-001',
-    'purchaseOrderNumber': 'PO-2026-001',
+    purchaseOrderNumber: 'PO-2026-001',
     'العملة': currency,
-    'currency': currency,
+    currency,
     'طريقة_الدفع': language === 'ar' ? 'تحويل بنكي' : 'Virement bancaire',
-    'paymentMethod': language === 'ar' ? 'تحويل بنكي' : 'Bank Transfer',
-    'تاريخ_الطلب': new Date().toLocaleDateString(locale),
-    'orderDate': new Date().toLocaleDateString(locale),
-    'تاريخ_الدفع': new Date().toLocaleDateString(locale),
-    'paymentDate': new Date().toLocaleDateString(locale),
+    paymentMethod: language === 'ar' ? 'تحويل بنكي' : 'Bank Transfer',
+    'تاريخ_الطلب': today,
+    orderDate: today,
+    'تاريخ_الدفع': today,
+    paymentDate: today,
     'الكمية': '10',
-    'quantity': '10',
-    'بنود_الطلب': language === 'ar' 
-      ? '1. منتج تجريبي × 10 @ 15,000.00 دج' 
+    quantity: '10',
+    'بنود_الطلب': language === 'ar'
+      ? '1. منتج تجريبي × 10 @ 15,000.00 دج'
       : '1. Test Product × 10 @ 15,000.00 DZD',
-    'lineItems': language === 'ar' 
-      ? '1. منتج تجريبي × 10 @ 15,000.00 دج' 
+    lineItems: language === 'ar'
+      ? '1. منتج تجريبي × 10 @ 15,000.00 دج'
       : '1. Test Product × 10 @ 15,000.00 DZD',
   }
 
   return body.replace(/\{\{([^}]+)\}\}/g, (match, key) => values[String(key)] ?? match)
 }
 
+function looksLikeHtmlTemplate(content: string): boolean {
+  return /<(?:style|div|table|section|html)\b/i.test(content)
+}
+
 function buildSupplierTemplatePrintHtml(title: string, body: string, language: 'ar' | 'fr') {
-  const isRTL = language === 'ar'
+  const isRTL = language === 'ar' || /[\u0600-\u06FF]/.test(body)
   const dir = isRTL ? 'rtl' : 'ltr'
+
+  if (looksLikeHtmlTemplate(body)) {
+    return `<!DOCTYPE html>
+<html lang="${isRTL ? 'ar' : 'en'}" dir="${dir}">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>${title}</title>
+</head>
+<body style="margin:0;background:#fff;">
+${body}
+</body>
+</html>`
+  }
+
   const align = isRTL ? 'right' : 'left'
   const font = isRTL ? "'Cairo', 'Tahoma', sans-serif" : "'Inter', 'Segoe UI', sans-serif"
   const content = body.split('\n').map(line => {
@@ -504,12 +557,17 @@ function SupplierTemplateForm({
 
   const handleSave = () => {
     if (!templateName.trim() || !templateBody.trim()) return
-    onSave({ templateName: templateName.trim(), templateBody })
+    onSave({
+      templateName: templateName.trim(),
+      templateBody,
+      kind: template?.kind ?? 'custom',
+      systemKey: null,
+    })
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-4xl rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
+      <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl dark:bg-gray-800">
         <div className="flex items-center justify-between border-b border-gray-200 p-5 dark:border-gray-700">
           <h2 className="font-semibold text-gray-900 dark:text-white">{template ? t('suppliers.editTemplate') : t('suppliers.addTemplate')}</h2>
           <button onClick={onCancel} className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700">
@@ -518,6 +576,11 @@ function SupplierTemplateForm({
         </div>
 
         <div className="space-y-4 p-5">
+          {template?.systemKey && (
+            <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+              {t('suppliers.htmlTemplateHint')}
+            </p>
+          )}
           <div>
             <label className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{t('suppliers.templateName')}</label>
             <input
@@ -551,7 +614,7 @@ function SupplierTemplateForm({
               onChange={e => setTemplateBody(e.target.value)}
               rows={16}
               dir={language === 'ar' ? 'rtl' : 'ltr'}
-              className="w-full resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              className="w-full resize-none rounded-xl border border-gray-300 bg-white px-3 py-2 font-mono text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
             />
           </div>
         </div>
@@ -607,19 +670,20 @@ function SupplierTemplatePreviewModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4">
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
-        <div className="flex items-center justify-between border-b border-gray-200 p-5 dark:border-gray-700">
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-200 p-4 sm:p-5 dark:border-gray-700">
           <div>
             <h2 className="font-bold text-gray-900 dark:text-white">{template.templateName}</h2>
             <p className="text-xs text-gray-500">{t('suppliers.chooseSupplier')}</p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
+          <button type="button" onClick={onClose} className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="grid flex-1 gap-4 overflow-hidden p-5 lg:grid-cols-[340px_minmax(0,1fr)]">
+        {/* Mobile: stacked wizard; desktop: dual pane */}
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 sm:p-5 lg:grid-cols-[340px_minmax(0,1fr)] lg:overflow-hidden">
           <div className="space-y-3 rounded-2xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800">
             <div className="relative">
               <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -627,17 +691,18 @@ function SupplierTemplatePreviewModal({
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder={t('suppliers.searchSupplier')}
-                className="w-full rounded-lg border border-gray-300 bg-white py-2 ps-9 pe-3 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                className="w-full rounded-lg border border-gray-300 bg-white py-2.5 ps-9 pe-3 text-base text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:text-sm"
               />
             </div>
 
-            <div className="max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
+            <div className="max-h-48 overflow-y-auto rounded-xl border border-gray-200 bg-white sm:max-h-72 dark:border-gray-700 dark:bg-gray-900">
               {filteredSuppliers.map(supplier => (
                 <button
+                  type="button"
                   key={supplier.id}
                   onClick={() => setSelectedSupplierId(supplier.id)}
                   className={cn(
-                    'flex w-full items-center justify-between border-b border-gray-100 px-3 py-3 text-start last:border-b-0 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800',
+                    'flex min-h-11 w-full items-center justify-between border-b border-gray-100 px-3 py-3 text-start last:border-b-0 hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800',
                     selectedSupplier?.id === supplier.id && 'bg-blue-50 dark:bg-blue-900/20'
                   )}
                 >
@@ -653,27 +718,52 @@ function SupplierTemplatePreviewModal({
               )}
             </div>
 
-            <button onClick={handlePrint} disabled={!selectedSupplier} className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+            <button
+              type="button"
+              onClick={handlePrint}
+              disabled={!selectedSupplier}
+              className="hidden min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 lg:flex"
+            >
               <Printer className="h-4 w-4" />
               {t('suppliers.printExport')}
             </button>
           </div>
 
-          <div className="overflow-y-auto rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-700 dark:bg-gray-950">
+          <div className="min-h-[280px] overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-950 lg:min-h-0">
             {selectedSupplier ? (
-              <div dir={language === 'ar' ? 'rtl' : 'ltr'}>
-                <div className="mb-4 border-b border-gray-200 pb-3 text-center dark:border-gray-700">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{template.templateName}</h3>
-                  <p className="text-sm text-gray-500">{selectedSupplier.name}</p>
+              looksLikeHtmlTemplate(mergedBody) ? (
+                <iframe
+                  title={template.templateName}
+                  className="h-full min-h-[280px] w-full bg-white lg:min-h-[420px]"
+                  srcDoc={buildSupplierTemplatePrintHtml(template.templateName, mergedBody, language)}
+                />
+              ) : (
+                <div className="overflow-y-auto p-5" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+                  <div className="mb-4 border-b border-gray-200 pb-3 text-center dark:border-gray-700">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{template.templateName}</h3>
+                    <p className="text-sm text-gray-500">{selectedSupplier.name}</p>
+                  </div>
+                  <div className="whitespace-pre-wrap text-sm leading-8 text-gray-800 dark:text-gray-200">
+                    {mergedBody}
+                  </div>
                 </div>
-                <div className="whitespace-pre-wrap text-sm leading-8 text-gray-800 dark:text-gray-200">
-                  {mergedBody}
-                </div>
-              </div>
+              )
             ) : (
-              <div className="flex h-full items-center justify-center text-gray-500">{t('common.noData')}</div>
+              <div className="flex h-full items-center justify-center p-5 text-gray-500">{t('common.noData')}</div>
             )}
           </div>
+        </div>
+
+        <div className="shrink-0 border-t border-gray-200 p-3 lg:hidden dark:border-gray-700 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <button
+            type="button"
+            onClick={handlePrint}
+            disabled={!selectedSupplier}
+            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 py-2.5 text-sm font-medium text-white disabled:opacity-50"
+          >
+            <Printer className="h-4 w-4" />
+            {t('suppliers.printExport')}
+          </button>
         </div>
       </div>
     </div>
@@ -681,7 +771,7 @@ function SupplierTemplatePreviewModal({
 }
 
 export function Suppliers() {
-  const { t, language, role, suppliers, supplierTemplates, addSupplier, updateSupplier, deleteSupplier, getSupplierRating, addSupplierTemplate, updateSupplierTemplate, deleteSupplierTemplate } = useAppStore()
+  const { t, language, role, suppliers, supplierTemplates, addSupplier, updateSupplier, deleteSupplier, getSupplierRating, addSupplierTemplate, updateSupplierTemplate, deleteSupplierTemplate, duplicateSupplierTemplate } = useAppStore()
   const navigate = useNavigate()
   const [activeView, setActiveView] = useState<'suppliers' | 'templates'>('suppliers')
   const [search, setSearch] = useState('')
@@ -707,7 +797,7 @@ export function Suppliers() {
     }),
   [suppliers, search, statusFilter])
 
-  const handleSave = async (data: SupplierFormData, options?: { addAnother?: boolean }) => {
+  const handleSave = async (data: SupplierSavePayload, options?: { addAnother?: boolean }) => {
     if (!isOrgAdmin(role)) {
       toast.error(t('common.error'))
       return
@@ -758,6 +848,24 @@ export function Suppliers() {
     }
   }
 
+  const handleDuplicateTemplate = async (id: string) => {
+    if (!isOrgAdmin(role)) return
+    try {
+      await duplicateSupplierTemplate(id)
+      toast.success(t('common.success'))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('common.error'))
+    }
+  }
+
+  const templateSnippet = (body: string) => {
+    if (looksLikeHtmlTemplate(body)) {
+      const text = body.replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+      return text.slice(0, 160) || 'HTML'
+    }
+    return body
+  }
+
   const statusColor = (status: SupplierStatus) => {
     switch (status) {
       case 'active': return 'bg-green-500'
@@ -773,7 +881,7 @@ export function Suppliers() {
     <div className="p-4 lg:p-6 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('suppliers.title')}</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{t('suppliers.title')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {activeView === 'suppliers' ? `${filtered.length} ${t('common.records')}` : `${templateCount} ${t('common.records')}`}
           </p>
@@ -781,7 +889,7 @@ export function Suppliers() {
         {isOrgAdmin(role) && (
           <button
             onClick={() => activeView === 'suppliers' ? (setEditItem(null), setShowForm(true)) : setTemplateEditor('new')}
-            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             <Plus className="w-4 h-4" />
             {activeView === 'suppliers' ? t('suppliers.addSupplier') : t('suppliers.addTemplate')}
@@ -819,7 +927,7 @@ export function Suppliers() {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder={t('suppliers.searchPlaceholder')}
-                className="w-full ps-9 pe-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full ps-9 pe-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-base sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
@@ -884,18 +992,18 @@ export function Suppliers() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-4 gap-1 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+                  <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700 sm:grid-cols-4">
                     <div className="text-center">
                       <p className="text-base font-bold text-gray-900 dark:text-white">{supplier.leadTimeDays}</p>
-                      <p className="text-[10px] text-gray-500">{t('suppliers.leadTimeDays').split(' ')[0]}</p>
+                      <p className="text-xs text-gray-500">{t('suppliers.leadTimeDays').split(' ')[0]}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-base font-bold text-gray-900 dark:text-white">{supplier.minimumOrderQty}</p>
-                      <p className="text-[10px] text-gray-500">{t('suppliers.minimumOrderQty').split(' ')[0]}</p>
+                      <p className="text-xs text-gray-500">{t('suppliers.minimumOrderQty').split(' ')[0]}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-base font-bold text-blue-600">{supplier.phones.length}</p>
-                      <p className="text-[10px] text-gray-500">{t('suppliers.phoneNumbers').split(' ')[0]}</p>
+                      <p className="text-xs text-gray-500">{t('suppliers.phoneNumbers').split(' ')[0]}</p>
                     </div>
                     <div className="text-center flex flex-col items-center">
                       {(() => {
@@ -907,7 +1015,7 @@ export function Suppliers() {
                                 <Star key={s} className={cn('w-3 h-3', s <= Math.round(rating.overall) ? 'fill-amber-400 text-amber-400' : 'text-gray-300 dark:text-gray-600')} />
                               ))}
                             </div>
-                            <p className="text-[10px] text-gray-500">{rating.overall.toFixed(1)}</p>
+                            <p className="text-xs text-gray-500">{rating.overall.toFixed(1)}</p>
                           </>
                         ) : (
                           <Star className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600" />
@@ -917,15 +1025,15 @@ export function Suppliers() {
                   </div>
 
                   <div className="flex gap-1 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => navigate(`/suppliers/${supplier.id}`)} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                    <button onClick={() => navigate(`/suppliers/${supplier.id}`)} className="flex-1 min-h-11 flex items-center justify-center gap-1 py-2 text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
                       <Eye className="w-3 h-3" />{t('common.view')}
                     </button>
                     {isOrgAdmin(role) && (
                       <>
-                        <button onClick={() => { setEditItem(supplier); setShowForm(true) }} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors">
+                        <button onClick={() => { setEditItem(supplier); setShowForm(true) }} className="flex-1 min-h-11 flex items-center justify-center gap-1 py-2 text-xs text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors">
                           <Pencil className="w-3 h-3" />{t('common.edit')}
                         </button>
-                        <button onClick={() => handleDelete(supplier.id)} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                        <button onClick={() => handleDelete(supplier.id)} className="flex-1 min-h-11 flex items-center justify-center gap-1 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
                           <Trash2 className="w-3 h-3" />{t('common.delete')}
                         </button>
                       </>
@@ -958,20 +1066,30 @@ export function Suppliers() {
             ) : supplierTemplates.map(template => (
               <div key={template.id} className="rounded-2xl border border-gray-200 bg-white p-5 transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold text-gray-900 dark:text-white">{template.templateName}</h3>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">{template.templateName}</h3>
+                      {template.systemKey && (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                          {t('suppliers.builtInTemplate')}
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-1 text-xs text-gray-500">{formatDate(template.createdAt, language)}</p>
                   </div>
-                  <FileText className="h-5 w-5 text-blue-500" />
+                  <FileText className="h-5 w-5 flex-shrink-0 text-blue-500" />
                 </div>
                 <p className="mt-3 line-clamp-4 text-sm leading-6 text-gray-600 dark:text-gray-300">
-                  {template.templateBody}
+                  {templateSnippet(template.templateBody)}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {isOrgAdmin(role) && (
                     <>
                       <button onClick={() => setTemplateEditor(template)} className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-300">
                         <Pencil className="h-3.5 w-3.5" /> {t('common.edit')}
+                      </button>
+                      <button onClick={() => handleDuplicateTemplate(template.id)} className="flex items-center gap-1.5 rounded-lg bg-purple-50 px-3 py-1.5 text-xs font-medium text-purple-700 transition-colors hover:bg-purple-100 dark:bg-purple-900/20 dark:text-purple-300">
+                        <Copy className="h-3.5 w-3.5" /> {t('suppliers.duplicateTemplate')}
                       </button>
                       <button onClick={() => handleDeleteTemplate(template.id)} className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300">
                         <Trash2 className="h-3.5 w-3.5" /> {t('common.delete')}

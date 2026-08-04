@@ -1,143 +1,56 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router'
-import { Plus, Search, Users, Star, Package, X, Pencil, Trash2, Eye } from 'lucide-react'
+import { Plus, Search, Users, Pencil, Trash2, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
 import { StatusBadge } from '../ui/StatusBadge'
 import { cn } from '../../utils/cn'
-import type { Agent, AgentStatus } from '../../../types'
-
-const ALL_STATUSES: AgentStatus[] = ['active', 'traveling', 'delivered', 'delayed', 'inactive']
-
-function AgentForm({ initial, onSave, onCancel, t }: {
-  initial?: Partial<Agent>; onSave: (data: any) => void; onCancel: () => void
-  t: ReturnType<typeof useAppStore>['t']
-}) {
-  const [form, setForm] = useState({
-    name: initial?.name || '',
-    nameFr: initial?.nameFr || '',
-    phone: initial?.phone || '',
-    passport: initial?.passport || '',
-    country: initial?.country || 'الجزائر',
-    status: initial?.status || 'active',
-    notes: initial?.notes || '',
-  })
-  const set = (k: string, v: any) => setForm(f => ({ ...f, [k]: v }))
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="font-semibold text-gray-900 dark:text-white">
-            {initial?.id ? t('agents.editAgent') : t('agents.addAgent')}
-          </h2>
-          <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agents.fullName')} * (عربي)</label>
-              <input value={form.name} onChange={e => set('name', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nom (Français)</label>
-              <input value={form.nameFr} onChange={e => set('nameFr', e.target.value)} dir="ltr"
-                placeholder="ex: Ahmed Ben Ali"
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agents.phone')} *</label>
-              <input value={form.phone} onChange={e => set('phone', e.target.value)} dir="ltr"
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agents.passport')} *</label>
-              <input value={form.passport} onChange={e => set('passport', e.target.value)} dir="ltr"
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agents.country')}</label>
-              <input value={form.country} onChange={e => set('country', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('agents.status')}</label>
-              <select value={form.status} onChange={e => set('status', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
-                {ALL_STATUSES.map(s => <option key={s} value={s}>{t(`agents.statuses.${s}`)}</option>)}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common.notes')}</label>
-            <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 resize-none" />
-          </div>
-        </div>
-        <div className="flex gap-3 p-5 border-t border-gray-200 dark:border-gray-700">
-          <button onClick={() => {
-            if (!form.name.trim() || !form.phone.trim() || !form.passport.trim()) return
-            onSave({
-              ...form,
-              name: form.name.trim(),
-              nameFr: form.nameFr.trim(),
-              phone: form.phone.trim(),
-              passport: form.passport.trim(),
-              country: form.country.trim(),
-              notes: form.notes.trim(),
-            })
-          }}
-            className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-            {t('common.save')}
-          </button>
-          <button onClick={onCancel}
-            className="flex-1 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors">
-            {t('common.cancel')}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
+import { AgentForm } from '../agents/AgentForm'
+import type { Agent, AgentEmploymentStatus, AgentType } from '../../../types'
+import { parseTaxRate } from '../../../utils/agentTax'
 
 export function Agents() {
   const { t, language, agents, goods, addAgent, updateAgent, deleteAgent } = useAppStore()
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [typeFilter, setTypeFilter] = useState<string>('all')
   const [showForm, setShowForm] = useState(false)
   const [editItem, setEditItem] = useState<Agent | null>(null)
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return agents.filter(a => {
-      const matchSearch = !q || [a.name, a.nameFr, a.phone, a.passport]
-        .some(v => (v || '').toLowerCase().includes(q))
-      const matchStatus = statusFilter === 'all' || a.status === statusFilter
-      return matchSearch && matchStatus
+      const matchSearch =
+        !q ||
+        [a.name, a.nameFr, a.nameEn, a.code, a.companyName, a.phone, a.passport, a.email, a.whatsapp]
+          .some(v => (v || '').toLowerCase().includes(q))
+      const emp = a.employmentStatus || (a.status === 'inactive' ? 'inactive' : 'active')
+      const matchStatus = statusFilter === 'all' || emp === statusFilter
+      const matchType = typeFilter === 'all' || (a.agentType || 'standard') === typeFilter
+      return matchSearch && matchStatus && matchType
     })
-  }, [agents, search, statusFilter])
+  }, [agents, search, statusFilter, typeFilter])
 
   const getAgentGoodsCount = (agentId: string) =>
     goods.filter(g => g.agentId === agentId).length
 
-  const handleSave = async (data: any) => {
+  const displayName = (a: Agent) =>
+    language === 'fr' && a.nameFr ? a.nameFr : a.name
+
+  const handleSave = async (data: Record<string, unknown>) => {
     try {
       if (editItem) {
-        await updateAgent(editItem.id, data)
+        await updateAgent(editItem.id, data as Partial<Agent>)
       } else {
-        await addAgent(data)
+        await addAgent(data as Omit<Agent, 'id' | 'createdAt'>)
       }
       toast.success(t('common.success'))
       setShowForm(false)
       setEditItem(null)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('common.error'))
+      throw err
     }
   }
 
@@ -157,24 +70,27 @@ export function Agents() {
   const scoreBg = (score: number) =>
     score >= 90 ? 'bg-green-500' : score >= 75 ? 'bg-amber-500' : 'bg-red-500'
 
+  const employmentLabel = (a: Agent) => {
+    const emp = (a.employmentStatus || (a.status === 'inactive' ? 'inactive' : 'active')) as AgentEmploymentStatus
+    return t(`agents.employmentStatuses.${emp}`)
+  }
+
   return (
     <div className="p-4 lg:p-6 space-y-5">
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('agents.title')}</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{t('agents.title')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} {t('common.records')}</p>
         </div>
         <button
           onClick={() => { setEditItem(null); setShowForm(true) }}
-          className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
         >
           <Plus className="w-4 h-4" />
           {t('agents.addAgent')}
         </button>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute start-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -182,17 +98,31 @@ export function Agents() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={t('agents.searchPlaceholder')}
-            className="w-full ps-9 pe-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full ps-9 pe-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-base sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-          className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:ring-2 focus:ring-blue-500">
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className="min-h-11 px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-base sm:text-sm focus:ring-2 focus:ring-blue-500"
+        >
           <option value="all">{t('common.all')}</option>
-          {ALL_STATUSES.map(s => <option key={s} value={s}>{t(`agents.statuses.${s}`)}</option>)}
+          {(['active', 'inactive', 'suspended'] as AgentEmploymentStatus[]).map(s => (
+            <option key={s} value={s}>{t(`agents.employmentStatuses.${s}`)}</option>
+          ))}
+        </select>
+        <select
+          value={typeFilter}
+          onChange={e => setTypeFilter(e.target.value)}
+          className="min-h-11 px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-base sm:text-sm focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="all">{t('agents.allTypes')}</option>
+          {(['standard', 'auto_entrepreneur'] as AgentType[]).map(s => (
+            <option key={s} value={s}>{t(`agents.types.${s}`)}</option>
+          ))}
         </select>
       </div>
 
-      {/* Grid */}
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-500 dark:text-gray-400">
           <Users className="w-12 h-12 mx-auto mb-3 opacity-40" />
@@ -200,21 +130,41 @@ export function Agents() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map((agent) => (
-            <div key={agent.id} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md transition-shadow">
-              {/* Avatar + Status */}
+          {filtered.map(agent => (
+            <div
+              key={agent.id}
+              className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md transition-shadow"
+            >
               <div className="flex items-start justify-between mb-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-xl">
-                  {agent.name.charAt(0)}
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-xl">
+                  {displayName(agent).charAt(0)}
                 </div>
-                <StatusBadge status={agent.status} type="agent" label={t(`agents.statuses.${agent.status}`)} size="sm" />
+                <div className="flex flex-col items-end gap-1">
+                  <StatusBadge
+                    status={agent.employmentStatus === 'inactive' ? 'inactive' : 'active'}
+                    type="agent"
+                    label={employmentLabel(agent)}
+                    size="sm"
+                  />
+                  {agent.agentType === 'auto_entrepreneur' && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                      {t('agents.types.auto_entrepreneur')}
+                      {parseTaxRate(agent.effectiveTaxRate) > 0
+                        ? ` ${parseTaxRate(agent.effectiveTaxRate)}%`
+                        : ''}
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {/* Name */}
-              <h3 className="font-semibold text-gray-900 dark:text-white">{agent.name}</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">{agent.passport}</p>
+              <h3 className="font-semibold text-gray-900 dark:text-white">{displayName(agent)}</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
+                {agent.code ? `${agent.code} · ` : ''}{agent.passport}
+              </p>
+              {agent.companyName && (
+                <p className="text-xs text-gray-500 mt-0.5 truncate">{agent.companyName}</p>
+              )}
 
-              {/* Reliability */}
               <div className="mt-3">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-gray-500">{t('agents.reliabilityScore')}</span>
@@ -223,35 +173,45 @@ export function Agents() {
                   </span>
                 </div>
                 <div className="h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
-                  <div className={cn('h-full rounded-full', scoreBg(agent.reliabilityScore))} style={{ width: `${agent.reliabilityScore}%` }} />
+                  <div
+                    className={cn('h-full rounded-full', scoreBg(agent.reliabilityScore))}
+                    style={{ width: `${agent.reliabilityScore}%` }}
+                  />
                 </div>
               </div>
 
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-2 mt-3">
+              <div className="grid grid-cols-2 gap-2 mt-3 sm:grid-cols-3">
                 <div className="text-center">
                   <p className="text-base font-bold text-gray-900 dark:text-white">{agent.totalDeliveries}</p>
-                  <p className="text-[10px] text-gray-500">{t('agents.totalDeliveries')}</p>
+                  <p className="text-xs text-gray-500">{t('agents.totalDeliveries')}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-base font-bold text-red-600">{agent.delayedDeliveries}</p>
-                  <p className="text-[10px] text-gray-500">{t('agents.delayedDeliveries')}</p>
+                  <p className="text-xs text-gray-500">{t('agents.delayedDeliveries')}</p>
                 </div>
-                <div className="text-center">
+                <div className="text-center col-span-2 sm:col-span-1">
                   <p className="text-base font-bold text-blue-600">{getAgentGoodsCount(agent.id)}</p>
-                  <p className="text-[10px] text-gray-500">{t('goods.goodsCount')}</p>
+                  <p className="text-xs text-gray-500">{t('goods.goodsCount')}</p>
                 </div>
               </div>
 
-              {/* Actions */}
               <div className="flex gap-1 mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-                <button onClick={() => navigate(`/agents/${agent.id}`)} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
+                <button
+                  onClick={() => navigate(`/agents/${agent.id}`)}
+                  className="flex-1 min-h-11 flex items-center justify-center gap-1 py-2 text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                >
                   <Eye className="w-3 h-3" />{t('common.view')}
                 </button>
-                <button onClick={() => { setEditItem(agent); setShowForm(true) }} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors">
+                <button
+                  onClick={() => { setEditItem(agent); setShowForm(true) }}
+                  className="flex-1 min-h-11 flex items-center justify-center gap-1 py-2 text-xs text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
+                >
                   <Pencil className="w-3 h-3" />{t('common.edit')}
                 </button>
-                <button onClick={() => handleDelete(agent.id)} className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+                <button
+                  onClick={() => void handleDelete(agent.id)}
+                  className="flex-1 flex items-center justify-center gap-1 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                >
                   <Trash2 className="w-3 h-3" />{t('common.delete')}
                 </button>
               </div>
@@ -265,7 +225,6 @@ export function Agents() {
           initial={editItem || undefined}
           onSave={handleSave}
           onCancel={() => { setShowForm(false); setEditItem(null) }}
-          t={t}
         />
       )}
     </div>

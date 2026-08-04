@@ -1,8 +1,11 @@
 import { defineConfig } from 'vite'
 import path from 'path'
+import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 function figmaAssetResolver() {
   return {
@@ -17,35 +20,68 @@ function figmaAssetResolver() {
 }
 
 export default defineConfig(({ mode }) => {
-  // Netlify sets NETLIFY=true. Prefer VITE_API_URL in Site settings; do not fail the build
-  // so the static site can still deploy before the API host is ready.
-  if (process.env.NETLIFY === 'true' && !process.env.VITE_API_URL) {
-    console.warn(
-      '[CargoBridge] VITE_API_URL is not set on Netlify. ' +
-        'Build continues with the local fallback (127.0.0.1) — login will not work until you set ' +
-        'VITE_API_URL=https://your-api.example.com/api in Site settings → Environment variables.',
+  // Production: fail closed — never bake a missing API URL.
+  if (mode === 'production' && !process.env.VITE_API_URL?.trim()) {
+    throw new Error(
+      'VITE_API_URL is required for production builds (e.g. /api for same-origin VPS). ' +
+        'Set it at build time (export VITE_API_URL=/api), then rebuild.',
     )
   }
 
   return {
     plugins: [
       figmaAssetResolver(),
-      // The React and Tailwind plugins are both required for Make, even if
-      // Tailwind is not being actively used – do not remove them
       react(),
       tailwindcss(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['favicon.svg', 'pwa-192.png', 'pwa-512.png'],
+        manifest: {
+          name: 'CargoBridge',
+          short_name: 'CargoBridge',
+          description: 'International shipping and supplier management',
+          theme_color: '#1e40af',
+          background_color: '#0f172a',
+          display: 'standalone',
+          orientation: 'portrait-primary',
+          start_url: '/',
+          lang: 'ar',
+          icons: [
+            { src: '/pwa-192.png', sizes: '192x192', type: 'image/png' },
+            { src: '/pwa-512.png', sizes: '512x512', type: 'image/png' },
+            { src: '/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          ],
+        },
+        workbox: {
+          navigateFallback: '/index.html',
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          runtimeCaching: [
+            {
+              urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
+              handler: 'NetworkOnly',
+            },
+          ],
+        },
+        devOptions: { enabled: false },
+      }),
     ],
     server: {
       port: 3025,
+      host: true,
+      strictPort: false,
+      // Same-origin /api proxy (browser stays on HTTP localhost → no cert warnings)
+      proxy: {
+        '/api': {
+          target: 'http://127.0.0.1:8080',
+          changeOrigin: true,
+        },
+      },
     },
     resolve: {
       alias: {
-        // Alias @ to the src directory
         '@': path.resolve(__dirname, './src'),
       },
     },
-
-    // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
     assetsInclude: ['**/*.svg', '**/*.csv'],
   }
 })

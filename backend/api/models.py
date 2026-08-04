@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 
@@ -35,30 +36,116 @@ class Agent(OrgModel):
         ('delayed', 'Delayed'),
         ('inactive', 'Inactive'),
     ]
+    AGENT_TYPE_CHOICES = [
+        ('standard', 'Standard Agent'),
+        ('auto_entrepreneur', 'Auto-Entrepreneur'),
+    ]
+    EMPLOYMENT_STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('inactive', 'Inactive'),
+        ('suspended', 'Suspended'),
+    ]
+    CHANNEL_CHOICES = [
+        ('phone', 'Phone'),
+        ('whatsapp', 'WhatsApp'),
+        ('email', 'Email'),
+        ('other', 'Other'),
+    ]
 
+    code = models.CharField(max_length=32, blank=True, default='')
     name = models.CharField(max_length=255)
     name_fr = models.CharField(max_length=255, blank=True, default='')
+    name_en = models.CharField(max_length=255, blank=True, default='')
+    company_name = models.CharField(max_length=255, blank=True, default='')
+    agent_type = models.CharField(max_length=32, choices=AGENT_TYPE_CHOICES, default='standard')
+    employment_status = models.CharField(
+        max_length=16, choices=EMPLOYMENT_STATUS_CHOICES, default='active'
+    )
     phone = models.CharField(max_length=64)
+    phone_alt = models.CharField(max_length=64, blank=True, default='')
+    whatsapp = models.CharField(max_length=64, blank=True, default='')
+    email = models.EmailField(blank=True, default='')
+    website = models.URLField(blank=True, default='')
+    preferred_channel = models.CharField(
+        max_length=16, choices=CHANNEL_CHOICES, default='phone'
+    )
     passport = models.CharField(max_length=64)
+    passport_expiry = models.DateField(null=True, blank=True)
+    national_id = models.CharField(max_length=64, blank=True, default='')
+    business_registration_number = models.CharField(max_length=64, blank=True, default='')
+    tax_id = models.CharField(max_length=64, blank=True, default='')
     country = models.CharField(max_length=128)
+    state_province = models.CharField(max_length=128, blank=True, default='')
+    city = models.CharField(max_length=128, blank=True, default='')
+    postal_code = models.CharField(max_length=32, blank=True, default='')
+    address = models.TextField(blank=True, default='')
+    preferred_currency = models.CharField(max_length=8, default='DZD')
+    commission_rate = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    tax_rate_override = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    preferred_payment_method = models.CharField(max_length=64, blank=True, default='')
+    bank_name = models.CharField(max_length=255, blank=True, default='')
+    bank_account = models.CharField(max_length=128, blank=True, default='')
+    iban = models.CharField(max_length=64, blank=True, default='')
+    swift = models.CharField(max_length=32, blank=True, default='')
+    languages = models.JSONField(default=list, blank=True)
+    services = models.JSONField(default=list, blank=True)
+    operating_countries = models.JSONField(default=list, blank=True)
+    primary_trade_region = models.CharField(max_length=128, blank=True, default='')
+    years_experience = models.IntegerField(null=True, blank=True)
     status = models.CharField(max_length=32, choices=STATUS_CHOICES, default='active')
     reliability_score = models.IntegerField(default=0)
     total_deliveries = models.IntegerField(default=0)
     delayed_deliveries = models.IntegerField(default=0)
     last_active = models.DateTimeField(null=True, blank=True)
     notes = models.TextField(blank=True, default='')
+    internal_notes = models.TextField(blank=True, default='')
+    is_deleted = models.BooleanField(default=False)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='deleted_agents',
+    )
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=['organization', 'passport'],
-                name='uniq_agent_org_passport',
+                condition=models.Q(is_deleted=False),
+                name='uniq_agent_org_passport_active',
             ),
             models.UniqueConstraint(
                 fields=['organization', 'phone'],
-                name='uniq_agent_org_phone',
+                condition=models.Q(is_deleted=False),
+                name='uniq_agent_org_phone_active',
+            ),
+            models.UniqueConstraint(
+                fields=['organization', 'code'],
+                condition=models.Q(is_deleted=False) & ~models.Q(code=''),
+                name='uniq_agent_org_code_active',
             ),
         ]
+
+
+class AgentTaxRule(OrgModel):
+    AGENT_TYPE_CHOICES = Agent.AGENT_TYPE_CHOICES
+
+    agent_type = models.CharField(max_length=32, choices=AGENT_TYPE_CHOICES)
+    tax_percent = models.DecimalField(max_digits=8, decimal_places=2, default=0)
+    label_ar = models.CharField(max_length=128, blank=True, default='')
+    label_fr = models.CharField(max_length=128, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'agent_type'],
+                name='uniq_agent_tax_rule_org_type',
+            ),
+        ]
+
 
 class Goods(OrgModel):
     STATUS_CHOICES = [
@@ -124,7 +211,7 @@ class Goods(OrgModel):
     )
     is_deleted = models.BooleanField(default=False)
     deleted_by = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -147,7 +234,7 @@ class GoodsQrCode(models.Model):
     goods = models.OneToOneField(Goods, on_delete=models.CASCADE, related_name='qr_code')
     token = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True, editable=False)
     created_by = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -173,7 +260,7 @@ class GoodsTrackingEvent(models.Model):
     from_status = models.CharField(max_length=32, blank=True, default='')
     to_status = models.CharField(max_length=32)
     user = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -206,7 +293,7 @@ class GoodsCustomsEvent(models.Model):
     from_status = models.CharField(max_length=16, blank=True, default='')
     to_status = models.CharField(max_length=16)
     user = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -240,7 +327,7 @@ class GoodsScanLog(models.Model):
         related_name='scan_logs',
     )
     user = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -292,8 +379,34 @@ class DocumentTemplate(OrgModel):
 
 
 class SupplierDocumentTemplate(OrgModel):
+    KIND_CHOICES = [
+        ('buying', 'Buying'),
+        ('payment', 'Payment'),
+        ('custom', 'Custom'),
+    ]
+
     template_name = models.CharField(max_length=255)
     template_body = models.TextField()
+    system_key = models.CharField(max_length=64, null=True, blank=True)
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES, default='custom')
+    is_deleted = models.BooleanField(default=False)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='deleted_supplier_document_templates',
+    )
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'system_key'],
+                condition=models.Q(system_key__isnull=False),
+                name='uniq_supplier_template_system_key_per_org',
+            ),
+        ]
 
 
 class Supplier(OrgModel):
@@ -330,7 +443,7 @@ class Supplier(OrgModel):
     balance_currency = models.CharField(max_length=8, default='USD')
     is_deleted = models.BooleanField(default=False)
     deleted_by = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -389,14 +502,14 @@ class PurchaseOrder(OrgModel):
     total_amount = models.DecimalField(max_digits=14, decimal_places=2, default=0)
     is_deleted = models.BooleanField(default=False)
     created_by = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name='created_purchase_orders',
     )
     deleted_by = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -460,14 +573,14 @@ class SupplierPayment(OrgModel):
     notes = models.TextField(blank=True, default='')
     is_deleted = models.BooleanField(default=False)
     created_by = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name='created_supplier_payments',
     )
     deleted_by = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -503,14 +616,14 @@ class SupplierAdjustment(OrgModel):
     reason = models.TextField()
     is_deleted = models.BooleanField(default=False)
     created_by = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name='created_supplier_adjustments',
     )
     deleted_by = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -545,7 +658,7 @@ class SupplierDocument(OrgModel):
     uploaded_at = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
     deleted_by = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -571,6 +684,14 @@ class SupplierCommunication(OrgModel):
     follow_up_required = models.BooleanField(default=False)
     follow_up_date = models.DateField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='deleted_supplier_communications',
+    )
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
 
 class SupplierTask(OrgModel):
@@ -587,6 +708,14 @@ class SupplierTask(OrgModel):
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending')
     completed_at = models.DateTimeField(null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='deleted_supplier_tasks',
+    )
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
 
 class SupplierRating(OrgModel):
@@ -629,7 +758,7 @@ class MoneyAuditEvent(models.Model):
     entity_id = models.UUIDField()
     action = models.CharField(max_length=32, choices=ACTION_CHOICES)
     user = models.ForeignKey(
-        'auth.User',
+        settings.AUTH_USER_MODEL,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -681,3 +810,127 @@ class CalculatorRecord(OrgModel):
     result = models.DecimalField(max_digits=14, decimal_places=2)
     currency = models.CharField(max_length=8, default='DZD')
     timestamp = models.DateTimeField(auto_now_add=True)
+
+
+class BusinessActivityEvent(models.Model):
+    """Immutable org-scoped business activity / audit trail entry."""
+
+    MODULE_CHOICES = [
+        ('goods', 'Goods'),
+        ('suppliers', 'Suppliers'),
+        ('agents', 'Agents'),
+        ('purchase_orders', 'Purchase Orders'),
+        ('payments', 'Payments'),
+        ('adjustments', 'Adjustments'),
+        ('calculator', 'Calculator'),
+        ('templates', 'Templates'),
+        ('documents', 'Documents'),
+        ('tasks', 'Tasks'),
+        ('auth', 'Authentication'),
+        ('settings', 'Settings'),
+        ('notifications', 'Notifications'),
+        ('system', 'System'),
+    ]
+    ACTION_CHOICES = [
+        ('create', 'Create'),
+        ('update', 'Update'),
+        ('soft_delete', 'Soft Delete'),
+        ('hard_delete', 'Hard Delete'),
+        ('status_change', 'Status Change'),
+        ('mark_paid', 'Mark Paid'),
+        ('amount_paid_update', 'Amount Paid Update'),
+        ('convert', 'Convert'),
+        ('login', 'Login'),
+        ('logout', 'Logout'),
+        ('export', 'Export'),
+        ('import', 'Import'),
+        ('generate', 'Generate'),
+        ('duplicate', 'Duplicate'),
+        ('scan', 'Scan'),
+        ('customs_change', 'Customs Change'),
+    ]
+    SOURCE_CHOICES = [
+        ('api', 'API'),
+        ('system', 'System'),
+        ('backfill', 'Backfill'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.ForeignKey(
+        'accounts.Organization',
+        on_delete=models.CASCADE,
+        related_name='activity_events',
+    )
+    occurred_at = models.DateTimeField(db_index=True)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='activity_events',
+    )
+    actor_username = models.CharField(max_length=150, blank=True, default='')
+    actor_display_name = models.CharField(max_length=255, blank=True, default='')
+    module = models.CharField(max_length=32, choices=MODULE_CHOICES)
+    action = models.CharField(max_length=32, choices=ACTION_CHOICES)
+    entity_type = models.CharField(max_length=64, blank=True, default='')
+    entity_id = models.UUIDField(null=True, blank=True)
+    entity_label = models.CharField(max_length=255, blank=True, default='')
+    summary = models.TextField(blank=True, default='')
+    summary_ar = models.TextField(blank=True, default='')
+    summary_fr = models.TextField(blank=True, default='')
+    before = models.JSONField(default=dict, blank=True)
+    after = models.JSONField(default=dict, blank=True)
+    changed_fields = models.JSONField(default=list, blank=True)
+    supplier_id = models.UUIDField(null=True, blank=True, db_index=True)
+    agent_id = models.UUIDField(null=True, blank=True, db_index=True)
+    goods_id = models.UUIDField(null=True, blank=True, db_index=True)
+    currency = models.CharField(max_length=8, blank=True, default='')
+    country = models.CharField(max_length=64, blank=True, default='')
+    status = models.CharField(max_length=64, blank=True, default='')
+    tags = models.JSONField(default=list, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    related_url = models.CharField(max_length=255, blank=True, default='')
+    is_archived = models.BooleanField(default=False)
+    source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default='api')
+
+    class Meta:
+        ordering = ['-occurred_at', '-id']
+        indexes = [
+            models.Index(fields=['organization', '-occurred_at']),
+            models.Index(fields=['organization', 'module', '-occurred_at']),
+            models.Index(fields=['organization', 'action', '-occurred_at']),
+            models.Index(fields=['organization', 'actor', '-occurred_at']),
+            models.Index(fields=['organization', 'entity_type', 'entity_id', '-occurred_at']),
+            models.Index(fields=['organization', 'supplier_id', '-occurred_at']),
+            models.Index(fields=['organization', 'agent_id', '-occurred_at']),
+            models.Index(fields=['organization', 'goods_id', '-occurred_at']),
+            models.Index(fields=['organization', 'is_archived', '-occurred_at']),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            return super().save(*args, **kwargs)
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and set(update_fields) <= {'is_archived'}:
+            return super().save(*args, **kwargs)
+        raise ValueError('BusinessActivityEvent rows are immutable (except is_archived).')
+
+    def delete(self, *args, **kwargs):
+        raise ValueError('BusinessActivityEvent rows cannot be deleted.')
+
+
+class ActivityRetentionPolicy(models.Model):
+    """Per-org retention settings for activity history (Phase 3)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    organization = models.OneToOneField(
+        'accounts.Organization',
+        on_delete=models.CASCADE,
+        related_name='activity_retention_policy',
+    )
+    retain_days = models.PositiveIntegerField(default=3650)
+    archive_after_days = models.PositiveIntegerField(default=730)
+    purge_archived = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)

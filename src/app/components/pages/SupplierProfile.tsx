@@ -12,6 +12,12 @@ import { PurchaseOrderForm } from './PurchaseOrders'
 import { PaymentForm } from './Payments'
 import { TaskQuickCreate } from '../quick-create/TaskQuickCreate'
 import { RATING_CRITERIA_LABELS_AR, RATING_CRITERIA_LABELS_FR } from '../../../types'
+import { PartnerLocalTimeCard } from '../trade-time/PartnerLocalTimeCard'
+import { ContactActions } from '../trade-time/ContactActions'
+import { ResponsiveDataList } from '../ui/ResponsiveDataList'
+import { TOUCH_ICON_BTN } from '../ui/responsive'
+import { ReceiptPrintModal } from '../ReceiptPrintModal'
+import type { ReceiptData } from '../ReceiptPrintModal'
 
 type Tab = 'overview' | 'products' | 'documents' | 'communications' | 'adjustments' | 'tasks' | 'performance' | 'rating'
 const TABS: Tab[] = ['overview', 'products', 'documents', 'communications', 'adjustments', 'tasks', 'performance', 'rating']
@@ -39,7 +45,7 @@ function ProductForm({ initial, onSave, onCancel, t }: Readonly<{
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-2xl">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
           <h2 className="font-semibold text-gray-900 dark:text-white">
             {initial?.id ? t('suppliers.editProduct') : t('suppliers.addProduct')}
@@ -57,7 +63,7 @@ function ProductForm({ initial, onSave, onCancel, t }: Readonly<{
             <input value={form.category} onChange={e => set('category', e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.sku')}</label>
               <input value={form.sku} onChange={e => set('sku', e.target.value)} dir="ltr"
@@ -221,7 +227,7 @@ function DocumentForm({
               <select
                 value={documentType}
                 onChange={e => setDocumentType(e.target.value as SupplierDocumentType)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-base text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:text-sm"
               >
                 {DOCUMENT_TYPE_OPTIONS.map(option => (
                   <option key={option.value} value={option.value}>{option.label}</option>
@@ -234,7 +240,7 @@ function DocumentForm({
                 <input
                   value={customLabel}
                   onChange={e => setCustomLabel(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-base text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:text-sm"
                 />
               </div>
             )}
@@ -247,7 +253,7 @@ function DocumentForm({
                 value={documentNumber}
                 onChange={e => setDocumentNumber(e.target.value)}
                 dir="ltr"
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-base text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:text-sm"
                 placeholder="INV-2024-001"
               />
             </div>
@@ -257,7 +263,7 @@ function DocumentForm({
                 type="date"
                 value={documentDate}
                 onChange={e => setDocumentDate(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-base text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:text-sm"
               />
             </div>
           </div>
@@ -269,7 +275,7 @@ function DocumentForm({
                 type="date"
                 value={expiryDate}
                 onChange={e => setExpiryDate(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-base text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:text-sm"
               />
             </div>
             <div>
@@ -291,7 +297,7 @@ function DocumentForm({
               value={notes}
               onChange={e => setNotes(e.target.value)}
               rows={3}
-              className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              className="w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-base text-gray-900 focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:text-sm"
             />
           </div>
         </div>
@@ -341,6 +347,7 @@ export function SupplierProfile() {
   const [showPoForm, setShowPoForm] = useState(false)
   const [showPaymentForm, setShowPaymentForm] = useState(false)
   const [showTaskForm, setShowTaskForm] = useState(false)
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
   const [editTask, setEditTask] = useState<import('../../../types').SupplierTask | null>(null)
   const [showInlineRating, setShowInlineRating] = useState(false)
   const ratingLabels = language === 'ar' ? RATING_CRITERIA_LABELS_AR : RATING_CRITERIA_LABELS_FR
@@ -466,7 +473,7 @@ export function SupplierProfile() {
             {supplier.name.charAt(0)}
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">{supplier.name}</h1>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{supplier.name}</h1>
             {supplier.nameFr && <p className="text-sm text-gray-500 dark:text-gray-400" dir="ltr">{supplier.nameFr}</p>}
             <div className="flex flex-wrap gap-2 mt-2">
               {supplier.categories.map(cat => (
@@ -480,15 +487,27 @@ export function SupplierProfile() {
             <span className="text-sm font-medium text-gray-900 dark:text-white">{t(`suppliers.statuses.${supplier.status}`)}</span>
           </div>
         </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 border-t border-gray-200 pt-4 dark:border-gray-700 lg:grid-cols-2">
+          <PartnerLocalTimeCard country={supplier.country} city={supplier.city} />
+          <div className="flex items-center">
+            <ContactActions
+              country={supplier.country}
+              city={supplier.city}
+              phone={supplier.phones[0]?.number}
+              whatsapp={supplier.whatsapp}
+              email={supplier.email}
+            />
+          </div>
+        </div>
       </div>
 
 {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="flex gap-4">
+        <nav className="flex gap-4 overflow-x-auto whitespace-nowrap scroll-smooth pb-px [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={cn(
-                'pb-3 px-1 text-sm font-medium border-b-2 transition-colors',
+                'shrink-0 pb-3 px-1 text-sm font-medium border-b-2 transition-colors min-h-11',
                 activeTab === tab
                   ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                   : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
@@ -506,7 +525,7 @@ export function SupplierProfile() {
           <div className="lg:col-span-2 space-y-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
               <h3 className="font-semibold text-gray-900 dark:text-white mb-4">{t('suppliers.supplierDetails')}</h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex items-start gap-3">
                   <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
                   <div>
@@ -522,8 +541,8 @@ export function SupplierProfile() {
                     <p className="text-sm font-medium text-gray-900 dark:text-white">{supplier.leadTimeDays} {language === 'ar' ? 'يوم' : 'jours'}</p>
                   </div>
                 </div>
-                {supplier.phones.map((phone) => (
-                  <div key={`${phone.label}-${phone.number}`} className="flex items-start gap-3">
+                {supplier.phones.map((phone, i) => (
+                  <div key={`${i}-${phone.label}`} className="flex items-start gap-3">
                     <Phone className="w-4 h-4 text-gray-400 mt-0.5" />
                     <div>
                       <p className="text-xs text-gray-500">{phone.label}</p>
@@ -555,7 +574,7 @@ export function SupplierProfile() {
             {/* Business Info */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
               <h3 className="font-semibold text-gray-900 dark:text-white mb-4">{t('suppliers.businessNotes') || 'معلومات العمل'}</h3>
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-xs text-gray-500">{t('suppliers.primaryContact')}</p>
                   <p className="text-gray-900 dark:text-white">{supplier.primaryContact}</p>
@@ -650,7 +669,7 @@ export function SupplierProfile() {
             {isOrgAdmin(role) && (
               <button
                 onClick={() => { setEditProduct(null); setShowProductForm(true) }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 <Plus className="w-4 h-4" />
                 {t('suppliers.addProduct')}
@@ -663,47 +682,72 @@ export function SupplierProfile() {
               <p>{t('suppliers.noProducts')}</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-900/50">
-                  <tr>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.productName')}</th>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('goods.category')}</th>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.sku')}</th>
-                    <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('suppliers.unitCost')}</th>
-                    <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {products.map(product => (
-                    <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                      <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">{product.name}</td>
-                      <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{product.category}</td>
-                      <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400 font-mono" dir="ltr">{product.sku || '—'}</td>
-                      <td className="px-5 py-4 text-sm text-gray-900 dark:text-white text-end font-mono" dir="ltr">
-                        {product.unitCost.toFixed(2)} {product.currency}
-                      </td>
-                      <td className="px-5 py-4 text-end">
-                        <div className="flex items-center justify-end gap-1">
-                          {isOrgAdmin(role) && (
-                            <>
-                              <button onClick={() => { setEditProduct(product); setShowProductForm(true) }}
-                                className="p-1.5 text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg">
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={() => handleDeleteProduct(product.id)}
-                                className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
+            <ResponsiveDataList
+              rows={products}
+              keyField={(product) => product.id}
+              table={(
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-gray-900/50">
+                    <tr>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.productName')}</th>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('goods.category')}</th>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.sku')}</th>
+                      <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('suppliers.unitCost')}</th>
+                      <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {products.map(product => (
+                      <tr key={product.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                        <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">{product.name}</td>
+                        <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{product.category}</td>
+                        <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400 font-mono" dir="ltr">{product.sku || '—'}</td>
+                        <td className="px-5 py-4 text-sm text-gray-900 dark:text-white text-end font-mono" dir="ltr">
+                          {product.unitCost.toFixed(2)} {product.currency}
+                        </td>
+                        <td className="px-5 py-4 text-end">
+                          <div className="flex items-center justify-end gap-1">
+                            {isOrgAdmin(role) && (
+                              <>
+                                <button type="button" onClick={() => { setEditProduct(product); setShowProductForm(true) }}
+                                  className={cn(TOUCH_ICON_BTN, 'text-amber-500')}>
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button type="button" onClick={() => handleDeleteProduct(product.id)}
+                                  className={cn(TOUCH_ICON_BTN, 'text-red-500')}>
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              renderCard={(product) => (
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 dark:text-white">{product.name}</p>
+                    <p className="mt-1 text-xs text-gray-500">{product.category} · {product.sku || '—'}</p>
+                    <p className="mt-2 font-mono text-sm text-gray-900 dark:text-white" dir="ltr">
+                      {product.unitCost.toFixed(2)} {product.currency}
+                    </p>
+                  </div>
+                  {isOrgAdmin(role) && (
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => { setEditProduct(product); setShowProductForm(true) }} className={cn(TOUCH_ICON_BTN, 'text-amber-500')}>
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button type="button" onClick={() => handleDeleteProduct(product.id)} className={cn(TOUCH_ICON_BTN, 'text-red-500')}>
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            />
           )}
         </div>
       )}
@@ -713,7 +757,7 @@ export function SupplierProfile() {
           <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900 dark:text-white">{t('suppliers.documents')}</h3>
             {isOrgAdmin(role) && (
-              <button onClick={() => setShowDocumentForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+              <button onClick={() => setShowDocumentForm(true)} className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
                 <Plus className="w-4 h-4" /> {t('suppliers.addDocument')}
               </button>
             )}
@@ -724,56 +768,88 @@ export function SupplierProfile() {
               <p>{t('suppliers.noDocuments')}</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-900/50">
-                  <tr>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.documentType')}</th>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.documentNumber')}</th>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.documentDate')}</th>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.expiryDate')}</th>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.notes')}</th>
-                    <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {documents.map(doc => (
-                    <tr key={doc.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                      <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">
-                        <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                          {documentTypeLabel(doc)}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-sm font-mono text-gray-900 dark:text-white" dir="ltr">{doc.documentNumber}</td>
-                      <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{formatDate(doc.documentDate, language)}</td>
-                      <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        <span className={cn('inline-flex rounded-full px-2.5 py-1 text-xs font-medium', getDocumentExpiryState(doc.expiryDate, language).className)}>
-                          {getDocumentExpiryState(doc.expiryDate, language).label}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        <div className="max-w-xs truncate">{doc.notes || '—'}</div>
-                      </td>
-                      <td className="px-5 py-4 text-end">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => handleViewDocument(doc)} className="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg" title={t('common.view')}>
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => handleDownloadDocument(doc)} className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg" title={t('common.download') || 'Download'}>
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
-                          {isOrgAdmin(role) && (
-                            <button onClick={() => { if (confirm(t('common.confirm'))) { deleteSupplierDocument(doc.id); toast.success(t('common.success')) } }} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg" title={t('common.delete')}>
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
+            <ResponsiveDataList
+              rows={documents}
+              keyField={(doc) => doc.id}
+              table={(
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-gray-900/50">
+                    <tr>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.documentType')}</th>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.documentNumber')}</th>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.documentDate')}</th>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.expiryDate')}</th>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.notes')}</th>
+                      <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {documents.map(doc => (
+                      <tr key={doc.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                        <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">
+                          <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                            {documentTypeLabel(doc)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-sm font-mono text-gray-900 dark:text-white" dir="ltr">{doc.documentNumber}</td>
+                        <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{formatDate(doc.documentDate, language)}</td>
+                        <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                          <span className={cn('inline-flex rounded-full px-2.5 py-1 text-xs font-medium', getDocumentExpiryState(doc.expiryDate, language).className)}>
+                            {getDocumentExpiryState(doc.expiryDate, language).label}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">
+                          <div className="max-w-xs truncate">{doc.notes || '—'}</div>
+                        </td>
+                        <td className="px-5 py-4 text-end">
+                          <div className="flex items-center justify-end gap-1">
+                            <button type="button" onClick={() => handleViewDocument(doc)} className={cn(TOUCH_ICON_BTN, 'text-blue-600')} title={t('common.view')}>
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button type="button" onClick={() => handleDownloadDocument(doc)} className={cn(TOUCH_ICON_BTN, 'text-green-600')} title={t('common.download') || 'Download'}>
+                              <Download className="w-4 h-4" />
+                            </button>
+                            {isOrgAdmin(role) && (
+                              <button type="button" onClick={() => { if (confirm(t('common.confirm'))) { deleteSupplierDocument(doc.id); toast.success(t('common.success')) } }} className={cn(TOUCH_ICON_BTN, 'text-red-500')} title={t('common.delete')}>
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              renderCard={(doc) => (
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                      {documentTypeLabel(doc)}
+                    </span>
+                    <span className={cn('inline-flex rounded-full px-2.5 py-1 text-xs font-medium', getDocumentExpiryState(doc.expiryDate, language).className)}>
+                      {getDocumentExpiryState(doc.expiryDate, language).label}
+                    </span>
+                  </div>
+                  <p className="font-mono text-sm text-gray-900 dark:text-white" dir="ltr">{doc.documentNumber}</p>
+                  <p className="text-xs text-gray-500">{formatDate(doc.documentDate, language)}</p>
+                  {doc.notes ? <p className="text-xs text-gray-500 line-clamp-2">{doc.notes}</p> : null}
+                  <div className="flex gap-1 pt-1">
+                    <button type="button" onClick={() => handleViewDocument(doc)} className={cn(TOUCH_ICON_BTN, 'text-blue-600')} title={t('common.view')}>
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button type="button" onClick={() => handleDownloadDocument(doc)} className={cn(TOUCH_ICON_BTN, 'text-green-600')} title={t('common.download') || 'Download'}>
+                      <Download className="w-4 h-4" />
+                    </button>
+                    {isOrgAdmin(role) && (
+                      <button type="button" onClick={() => { if (confirm(t('common.confirm'))) { deleteSupplierDocument(doc.id); toast.success(t('common.success')) } }} className={cn(TOUCH_ICON_BTN, 'text-red-500')} title={t('common.delete')}>
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            />
           )}
         </div>
       )}
@@ -782,7 +858,7 @@ export function SupplierProfile() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
           <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900 dark:text-white">{t('suppliers.communications')}</h3>
-            <button onClick={() => setShowCommForm(!showCommForm)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
+            <button onClick={() => setShowCommForm(!showCommForm)} className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
               <Plus className="w-4 h-4" /> {t('suppliers.addCommunication')}
             </button>
           </div>
@@ -826,34 +902,48 @@ export function SupplierProfile() {
           {communications.length === 0 ? (
             <div className="p-8 text-center text-gray-500 dark:text-gray-400"><p>{t('suppliers.noCommunications')}</p></div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-900/50">
-                  <tr>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.communicationType')}</th>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.summary')}</th>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.date')}</th>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {communications.map(com => (
-                    <tr key={com.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                      <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">{t(`suppliers.communicationTypes.${com.type}`)}</td>
-                      <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{com.summary}</td>
-                      <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{com.date}</td>
-                      <td className="px-5 py-4 text-end">
-                        <div className="flex items-center justify-end gap-1">
-                          <button onClick={() => deleteSupplierCommunication(com.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
+            <ResponsiveDataList
+              rows={communications}
+              keyField={(com) => com.id}
+              table={(
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-gray-900/50">
+                    <tr>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.communicationType')}</th>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.summary')}</th>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.date')}</th>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {communications.map(com => (
+                      <tr key={com.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                        <td className="px-5 py-4 text-sm text-gray-900 dark:text-white">{t(`suppliers.communicationTypes.${com.type}`)}</td>
+                        <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{com.summary}</td>
+                        <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{com.date}</td>
+                        <td className="px-5 py-4 text-end">
+                          <button type="button" onClick={() => deleteSupplierCommunication(com.id)} className={cn(TOUCH_ICON_BTN, 'text-red-500')}>
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              renderCard={(com) => (
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{t(`suppliers.communicationTypes.${com.type}`)}</p>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{com.summary}</p>
+                    <p className="mt-1 text-xs text-gray-400">{com.date}</p>
+                  </div>
+                  <button type="button" onClick={() => deleteSupplierCommunication(com.id)} className={cn(TOUCH_ICON_BTN, 'text-red-500')}>
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            />
           )}
         </div>
       )}
@@ -863,7 +953,7 @@ export function SupplierProfile() {
           <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900 dark:text-white">{t('suppliers.adjustments')}</h3>
             {isOrgAdmin(role) && (
-              <button onClick={() => setShowAdjForm(!showAdjForm)} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
+              <button onClick={() => setShowAdjForm(!showAdjForm)} className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
                 <Plus className="w-4 h-4" /> {t('suppliers.addAdjustment')}
               </button>
             )}
@@ -918,36 +1008,55 @@ export function SupplierProfile() {
           {adjustments.length === 0 ? (
             <div className="p-8 text-center text-gray-500 dark:text-gray-400"><p>{t('common.noData')}</p></div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-900/50">
-                  <tr>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.date')}</th>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.adjustmentType')}</th>
-                    <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('common.amount')}</th>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.reason')}</th>
-                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {adjustments.map(adj => (
-                    <tr key={adj.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                      <td className="px-5 py-4 text-sm text-gray-500">{adj.date}</td>
-                      <td className="px-5 py-4 text-sm">{t(`suppliers.adjustmentTypes.${adj.type}`)}</td>
-                      <td className="px-5 py-4 text-end text-sm font-mono">{adj.amount.toLocaleString()} {adj.currency}</td>
-                      <td className="px-5 py-4 text-sm text-gray-500">{adj.reason}</td>
-                      <td className="px-5 py-4 text-end">
-                        {isOrgAdmin(role) && (
-                          <button onClick={() => deleteSupplierAdjustment(adj.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </td>
+            <ResponsiveDataList
+              rows={adjustments}
+              keyField={(adj) => adj.id}
+              table={(
+                <table className="w-full">
+                  <thead className="bg-gray-50 dark:bg-gray-900/50">
+                    <tr>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.date')}</th>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.adjustmentType')}</th>
+                      <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('common.amount')}</th>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.reason')}</th>
+                      <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('common.actions')}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                    {adjustments.map(adj => (
+                      <tr key={adj.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                        <td className="px-5 py-4 text-sm text-gray-500">{adj.date}</td>
+                        <td className="px-5 py-4 text-sm">{t(`suppliers.adjustmentTypes.${adj.type}`)}</td>
+                        <td className="px-5 py-4 text-end text-sm font-mono">{adj.amount.toLocaleString()} {adj.currency}</td>
+                        <td className="px-5 py-4 text-sm text-gray-500">{adj.reason}</td>
+                        <td className="px-5 py-4 text-end">
+                          {isOrgAdmin(role) && (
+                            <button type="button" onClick={() => deleteSupplierAdjustment(adj.id)} className={cn(TOUCH_ICON_BTN, 'text-red-500')}>
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              renderCard={(adj) => (
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{t(`suppliers.adjustmentTypes.${adj.type}`)}</p>
+                    <p className="mt-1 font-mono text-sm text-gray-900 dark:text-white" dir="ltr">{adj.amount.toLocaleString()} {adj.currency}</p>
+                    <p className="mt-1 text-xs text-gray-500">{adj.reason}</p>
+                    <p className="mt-1 text-xs text-gray-400">{adj.date}</p>
+                  </div>
+                  {isOrgAdmin(role) && (
+                    <button type="button" onClick={() => deleteSupplierAdjustment(adj.id)} className={cn(TOUCH_ICON_BTN, 'text-red-500')}>
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
+            />
           )}
         </div>
       )}
@@ -956,7 +1065,7 @@ export function SupplierProfile() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
           <div className="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <h3 className="font-semibold text-gray-900 dark:text-white">{t('suppliers.tasks')}</h3>
-            <button onClick={() => { setEditTask(null); setShowTaskForm(true) }} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+            <button onClick={() => { setEditTask(null); setShowTaskForm(true) }} className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
               <Plus className="w-4 h-4" /> {t('suppliers.addTask')}
             </button>
           </div>
@@ -981,11 +1090,11 @@ export function SupplierProfile() {
                     </div>
                     <div className="flex items-center gap-1">
                       {task.status !== 'completed' && (
-                        <button onClick={() => markTaskComplete(task.id)} className="p-1.5 text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg" title={t('suppliers.markComplete')}>
+                        <button type="button" onClick={() => markTaskComplete(task.id)} className={cn(TOUCH_ICON_BTN, 'text-green-500')} title={t('suppliers.markComplete')}>
                           <CheckCircle className="w-4 h-4" />
                         </button>
                       )}
-                      <button onClick={() => deleteSupplierTask(task.id)} className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">
+                      <button type="button" onClick={() => deleteSupplierTask(task.id)} className={cn(TOUCH_ICON_BTN, 'text-red-500')}>
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -1007,7 +1116,7 @@ export function SupplierProfile() {
               </button>
             </div>
             {existingRating ? (
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="text-center p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl">
                   <p className="text-xs text-gray-500 mb-1">{t('suppliers.overallRating')}</p>
                   <div className="flex items-center justify-center gap-1">
@@ -1181,14 +1290,37 @@ export function SupplierProfile() {
                   unitCost: item.unitCost,
                 })),
               })
+              let receiptStatus = saved.status
               if (data.status === 'confirmed' && saved.status === 'draft') {
                 const toSent = await updatePurchaseOrderStatus(saved.id, 'sent')
                 if (toSent.success) {
-                  await updatePurchaseOrderStatus(saved.id, 'confirmed')
+                  const toConfirmed = await updatePurchaseOrderStatus(saved.id, 'confirmed')
+                  if (toConfirmed.success) {
+                    saved = { ...saved, status: 'confirmed' }
+                    receiptStatus = 'confirmed'
+                  }
                 }
               }
               toast.success(t('common.success'))
               setShowPoForm(false)
+              const totalAmount = data.items.reduce((sum, item) => sum + item.quantity * item.unitCost, 0)
+              setReceiptData({
+                type: 'purchase_order',
+                poNumber: saved.poNumber,
+                supplierName: supplier.name,
+                orderDate: data.orderDate,
+                expectedCompletionDate: data.expectedCompletionDate || undefined,
+                currency: data.currency,
+                status: receiptStatus,
+                notes: data.notes || undefined,
+                items: data.items.map(item => ({
+                  productName: item.productName,
+                  quantity: item.quantity,
+                  unitCost: item.unitCost,
+                  totalCost: item.quantity * item.unitCost,
+                })),
+                totalAmount,
+              })
             } catch (err) {
               toast.error(err instanceof Error ? err.message : t('common.error'))
             }
@@ -1216,7 +1348,7 @@ export function SupplierProfile() {
           supplierProducts={supplierProducts}
           onSave={async (data) => {
             try {
-              await addSupplierPayment({
+              const saved = await addSupplierPayment({
                 supplierId: data.supplierId,
                 purchaseOrderId: data.purchaseOrderId || undefined,
                 amount: data.amount,
@@ -1229,10 +1361,31 @@ export function SupplierProfile() {
               })
               toast.success(t('common.success'))
               setShowPaymentForm(false)
+              const po = purchaseOrders.find(p => p.id === data.purchaseOrderId)
+              setReceiptData({
+                type: 'payment',
+                paymentNumber: saved.paymentNumber,
+                supplierName: supplier.name,
+                purchaseOrderNumber: po?.poNumber,
+                amount: data.amount,
+                amountPaid: saved.amountPaid,
+                currency: data.currency,
+                paymentMethod: data.paymentMethod,
+                paymentDate: data.paymentDate,
+                status: saved.status || data.status,
+                notes: data.notes || undefined,
+              })
             } catch (err) {
               toast.error(err instanceof Error ? err.message : t('common.error'))
             }
           }}
+        />
+      )}
+
+      {receiptData && (
+        <ReceiptPrintModal
+          data={receiptData}
+          onClose={() => setReceiptData(null)}
         />
       )}
 

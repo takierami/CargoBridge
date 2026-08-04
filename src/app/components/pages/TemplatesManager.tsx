@@ -92,14 +92,16 @@ function TemplateEditor({ template, onSave, onCancel, t, language }: EditorProps
         </h3>
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={onCancel}
-            className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            className="min-h-11 px-3 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
           >
             {t('common.cancel')}
           </button>
           <button
+            type="button"
             onClick={handleSave}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
+            className="min-h-11 flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
           >
             <Save className="w-3.5 h-3.5" />
             {t('common.save')}
@@ -109,13 +111,13 @@ function TemplateEditor({ template, onSave, onCancel, t, language }: EditorProps
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {/* Name + Type */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('templates.templateName')} *</label>
             <input
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full min-h-11 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-base sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder={t('templates.templateName')}
             />
           </div>
@@ -125,7 +127,7 @@ function TemplateEditor({ template, onSave, onCancel, t, language }: EditorProps
               <select
                 value={type}
                 onChange={e => setType(e.target.value as TemplateType)}
-                className="w-full appearance-none ps-3 pe-8 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+                className="w-full min-h-11 appearance-none ps-3 pe-8 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-base sm:text-sm focus:ring-2 focus:ring-blue-500"
               >
                 {TYPES.map(tp => (
                   <option key={tp} value={tp}>{t(`templates.types.${tp}`)}</option>
@@ -270,13 +272,13 @@ export function TemplatesManager() {
 
   return (
     <div className="p-4 lg:p-6 h-full">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('templates.title')}</h1>
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{t('templates.title')}</h1>
         </div>
         <button
           onClick={() => setEditTarget('new')}
-          className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
         >
           <Plus className="w-4 h-4" />
           {t('templates.addTemplate')}
@@ -286,24 +288,30 @@ export function TemplatesManager() {
       <div className="flex flex-col lg:flex-row gap-5 h-[calc(100%-4rem)]">
         {/* Left: template list */}
         <div className="lg:w-80 flex-shrink-0 flex flex-col gap-3">
-          {/* Type filter tabs */}
-          <div className="flex rounded-xl border border-gray-200 dark:border-gray-600 overflow-hidden">
+          {/* Type filter chips — horizontal scroll on phone */}
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
             <button
+              type="button"
               onClick={() => setTypeFilter('all')}
               className={cn(
-                'flex-1 py-1.5 text-xs font-medium transition-colors',
-                typeFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50'
+                'shrink-0 min-h-11 px-3 rounded-xl text-sm font-medium transition-colors border',
+                typeFilter === 'all'
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-600'
               )}
             >
               {t('common.all')}
             </button>
             {TYPES.map(tp => (
               <button
+                type="button"
                 key={tp}
                 onClick={() => setTypeFilter(tp)}
                 className={cn(
-                  'flex-1 py-1.5 text-xs font-medium transition-colors',
-                  typeFilter === tp ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-50'
+                  'shrink-0 min-h-11 px-3 rounded-xl text-sm font-medium transition-colors border',
+                  typeFilter === tp
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-600'
                 )}
               >
                 {t(`templates.types.${tp}`)}

@@ -9,7 +9,9 @@ Run:
 from datetime import date
 from decimal import Decimal
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -25,9 +27,9 @@ class WorkflowIntegrityAuditTests(TestCase):
     def setUp(self):
         self.org = Organization.objects.create(name='Audit Org')
         self.china = User.objects.create_user(username='aud_cn', password='StrongPass1!')
-        UserProfile.objects.create(user=self.china, organization=self.org, role='china_admin')
+        UserProfile.objects.create(user=self.china, organization=self.org, role='admin', office='china')
         self.algeria = User.objects.create_user(username='aud_dz', password='StrongPass1!')
-        UserProfile.objects.create(user=self.algeria, organization=self.org, role='algeria_admin')
+        UserProfile.objects.create(user=self.algeria, organization=self.org, role='admin', office='algeria')
         self.agent = Agent.objects.create(
             organization=self.org, name='Ag', phone='1', passport='P', country='DZ',
         )
@@ -123,7 +125,7 @@ class WorkflowIntegrityAuditTests(TestCase):
         """Queries respect organization boundaries and soft-delete rules."""
         other = Organization.objects.create(name='Other')
         other_user = User.objects.create_user(username='aud_other', password='StrongPass1!')
-        UserProfile.objects.create(user=other_user, organization=other, role='china_admin')
+        UserProfile.objects.create(user=other_user, organization=other, role='admin', office='china')
         Goods.objects.create(
             organization=other,
             tracking_number='CB-OTHER',
@@ -178,11 +180,11 @@ class WorkflowIntegrityAuditTests(TestCase):
         )
         services.record_tracking_event(goods, from_status='', to_status='arrived')
         ok, err, _ = services.apply_goods_status_update(
-            goods, new_status='delivered', user=self.algeria, role='algeria_admin',
+            goods, new_status='delivered', user=self.algeria, role='admin', office='algeria',
         )
         self.assertFalse(ok)
         ok, err, updated = services.apply_goods_status_update(
-            goods, new_status='warehouse', user=self.algeria, role='algeria_admin',
+            goods, new_status='warehouse', user=self.algeria, role='admin', office='algeria',
         )
         self.assertTrue(ok, err)
         self.assertEqual(updated.status, 'warehouse')

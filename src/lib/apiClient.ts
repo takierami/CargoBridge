@@ -133,7 +133,7 @@ export const api = {
 export interface BootstrapData {
   user: {
     username: string
-    profile: { role: string }
+    profile: { role: string; office?: string }
     organization: { name: string; nameFr: string }
   }
   organization: { name: string; nameFr: string }

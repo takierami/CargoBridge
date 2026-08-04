@@ -7,12 +7,23 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from accounts.serializers import OrganizationSerializer, UserSerializer
 
 from . import services
-from .permissions import ROLE_ALGERIA_ADMIN, ROLE_CHINA_ADMIN, RoleWritePermission, user_role
+from .activity_mixin import ActivityLoggingMixin
+from .permissions import (
+    BOTH_ADMINS,
+    DOMAIN_WRITE_ROLES,
+    ORG_ADMIN_ROLES,
+    OrgObjectPermission,
+    RoleWritePermission,
+    user_office,
+    user_role,
+)
 
-# Equal write privileges for both office admins
-BOTH_ADMINS = (ROLE_CHINA_ADMIN, ROLE_ALGERIA_ADMIN)
+# Domain writers (owner/admin/manager/employee + legacy labels)
+# BOTH_ADMINS re-exported from permissions for existing ViewSet attrs
+
 from .models import (
     Agent,
+    AgentTaxRule,
     CalculatorRecord,
     ConversionRecord,
     Currency,
@@ -36,6 +47,7 @@ from .models import (
 )
 from .serializers import (
     AgentSerializer,
+    AgentTaxRuleSerializer,
     CalculatorRecordSerializer,
     ConversionRecordSerializer,
     CurrencySerializer,
@@ -57,9 +69,9 @@ from .serializers import (
 )
 
 
-class OrgViewSet(viewsets.ModelViewSet):
-    permission_classes = [RoleWritePermission]
-    allowed_write_roles = BOTH_ADMINS
+class OrgViewSet(ActivityLoggingMixin, viewsets.ModelViewSet):
+    permission_classes = [RoleWritePermission, OrgObjectPermission]
+    allowed_write_roles = DOMAIN_WRITE_ROLES
 
     def get_organization(self):
         return self.request.user.profile.organization
@@ -69,18 +81,57 @@ class OrgViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(organization=self.get_organization())
+        self.log_create(serializer.instance)
 
 
 class AgentViewSet(OrgViewSet):
-    queryset = Agent.objects.all()
+    queryset = Agent.objects.all().order_by('-updated_at')
     serializer_class = AgentSerializer
     allowed_write_roles = BOTH_ADMINS
+    activity_module = 'agents'
+
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
+
+    def perform_create(self, serializer):
+        org = self.get_organization()
+        from api.agent_tax_rules import upsert_agent_tax_rules
+        upsert_agent_tax_rules(org)
+        employment = serializer.validated_data.get('employment_status', 'active')
+        legacy_status = 'inactive' if employment == 'inactive' else 'active'
+        serializer.save(
+            organization=org,
+            code=services.next_sequence(org, 'agent', 'AGT'),
+            status=serializer.validated_data.get('status') or legacy_status,
+        )
+        self.log_create(serializer.instance)
+
+    def perform_destroy(self, instance):
+        from django.utils import timezone
+        before = None
+        from api import activity as activity_mod
+        before = activity_mod.snapshot_fields(instance)
+        instance.is_deleted = True
+        instance.deleted_by = self.request.user
+        instance.deleted_at = timezone.now()
+        instance.save(update_fields=['is_deleted', 'deleted_by', 'deleted_at', 'updated_at'])
+        self.log_destroy(instance, before)
+
+
+class AgentTaxRuleViewSet(OrgViewSet):
+    queryset = AgentTaxRule.objects.all().order_by('agent_type')
+    serializer_class = AgentTaxRuleSerializer
+    allowed_write_roles = BOTH_ADMINS
+
+    def get_queryset(self):
+        return super().get_queryset().filter(is_active=True)
 
 
 class GoodsViewSet(OrgViewSet):
-    queryset = Goods.objects.select_related('agent').all()
+    queryset = Goods.objects.select_related('agent').all().order_by('-updated_at')
     serializer_class = GoodsSerializer
     allowed_write_roles = BOTH_ADMINS
+    activity_module = 'goods'
     action_write_roles = {
         'update_status': BOTH_ADMINS,
         'allowed_statuses': BOTH_ADMINS,
@@ -94,6 +145,8 @@ class GoodsViewSet(OrgViewSet):
 
     def perform_destroy(self, instance):
         from django.utils import timezone
+        from api import activity as activity_mod
+        before = activity_mod.snapshot_fields(instance)
         # Soft-delete preserves tracking history (prefer cancel for business exit)
         instance.is_deleted = True
         instance.deleted_by = self.request.user
@@ -101,6 +154,7 @@ class GoodsViewSet(OrgViewSet):
         instance.save(update_fields=['is_deleted', 'deleted_by', 'deleted_at', 'updated_at'])
         if instance.agent_id:
             services.sync_agent_stats(instance.agent)
+        self.log_destroy(instance, before)
 
     def perform_create(self, serializer):
         org = self.get_organization()
@@ -114,21 +168,27 @@ class GoodsViewSet(OrgViewSet):
             from_status='',
             to_status='draft',
             user=self.request.user,
-            office=services.office_for_role(user_role(self.request.user)),
+            office=services.office_for_role(
+                user_role(self.request.user),
+                user_office(self.request.user),
+            ),
             notes='Shipment created',
         )
+        # Activity logged via tracking dual-write — no log_create here
 
     @action(detail=True, methods=['get'])
     def allowed_statuses(self, request, pk=None):
         goods = self.get_object()
         role = user_role(request.user)
+        office = user_office(request.user)
         consistent, last = services.goods_status_consistency(goods)
         return Response({
             'status': goods.status,
             'status_consistent': consistent,
             'last_event_status': last,
             'allowed_actions': (
-                services.allowed_next_statuses(goods.status, role) if consistent else []
+                services.allowed_next_statuses(goods.status, role=role, office=office)
+                if consistent else []
             ),
         })
 
@@ -144,6 +204,7 @@ class GoodsViewSet(OrgViewSet):
             new_status=new_status,
             user=request.user,
             role=user_role(request.user),
+            office=user_office(request.user),
             notes=request.data.get('notes') or '',
             photos=request.data.get('photos') or [],
             latitude=request.data.get('latitude'),
@@ -197,6 +258,7 @@ class GoodsViewSet(OrgViewSet):
             goods,
             new_status=new_status,
             role=user_role(request.user),
+            office=user_office(request.user),
             user=request.user,
             notes=request.data.get('notes') or '',
         )
@@ -239,7 +301,14 @@ class GoodsTrackView(APIView):
         if not qr:
             return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
         goods = qr.goods
-        role = user_role(request.user) if request.user and request.user.is_authenticated else None
+        role = None
+        office = None
+        authenticated = False
+        if request.user and request.user.is_authenticated and hasattr(request.user, 'profile'):
+            if request.user.profile.organization_id == qr.organization_id:
+                role = user_role(request.user)
+                office = user_office(request.user)
+                authenticated = True
         services.record_scan_log(
             goods,
             action='view',
@@ -249,7 +318,9 @@ class GoodsTrackView(APIView):
             from_status=goods.status,
             to_status=goods.status,
         )
-        payload = services.public_track_payload(goods, role=role)
+        payload = services.public_track_payload(
+            goods, role=role, office=office, authenticated=authenticated,
+        )
         payload['token'] = str(qr.token)
         return Response(payload)
 
@@ -276,11 +347,13 @@ class GoodsTrackStatusView(APIView):
             return Response({'error': 'status required'}, status=status.HTTP_400_BAD_REQUEST)
 
         role = user_role(request.user)
+        office = user_office(request.user)
         ok, err, updated = services.apply_goods_status_update(
             qr.goods,
             new_status=new_status,
             user=request.user,
             role=role,
+            office=office,
             notes=request.data.get('notes') or '',
             photos=request.data.get('photos') or [],
             latitude=request.data.get('latitude'),
@@ -293,7 +366,9 @@ class GoodsTrackStatusView(APIView):
             code = status.HTTP_403_FORBIDDEN if err and 'role' in err.lower() else status.HTTP_400_BAD_REQUEST
             return Response({'success': False, 'error': err}, status=code)
 
-        payload = services.public_track_payload(updated, role=role)
+        payload = services.public_track_payload(
+            updated, role=role, office=office, authenticated=True,
+        )
         payload['token'] = str(qr.token)
         payload['success'] = True
         return Response(payload)
@@ -302,6 +377,8 @@ class GoodsTrackStatusView(APIView):
 class NotificationViewSet(OrgViewSet):
     queryset = Notification.objects.all()
     serializer_class = NotificationSerializer
+    activity_module = 'notifications'
+
 
     @action(detail=False, methods=['post'])
     def mark_all_read(self, request):
@@ -313,6 +390,7 @@ class DocumentTemplateViewSet(OrgViewSet):
     queryset = DocumentTemplate.objects.all()
     serializer_class = DocumentTemplateSerializer
     allowed_write_roles = BOTH_ADMINS
+    activity_module = 'templates'
 
     @action(detail=True, methods=['post'])
     def set_default(self, request, pk=None):
@@ -342,12 +420,48 @@ class SupplierDocumentTemplateViewSet(OrgViewSet):
     queryset = SupplierDocumentTemplate.objects.all()
     serializer_class = SupplierDocumentTemplateSerializer
     allowed_write_roles = BOTH_ADMINS
+    activity_module = 'templates'
+
+    def get_queryset(self):
+        return super().get_queryset().filter(is_deleted=False)
+
+    def perform_create(self, serializer):
+        # User-created templates never get a system_key
+        serializer.save(
+            organization=self.get_organization(),
+            system_key=None,
+            kind=serializer.validated_data.get('kind') or 'custom',
+            is_deleted=False,
+        )
+        self.log_create(serializer.instance, entity_type='supplier_template')
+
+    def perform_destroy(self, instance):
+        from api import activity as activity_mod
+        before = activity_mod.snapshot_fields(instance)
+        instance.is_deleted = True
+        instance.save(update_fields=['is_deleted', 'updated_at'])
+        self.log_destroy(instance, before, entity_type='supplier_template')
+
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, pk=None):
+        template = self.get_object()
+        copy = SupplierDocumentTemplate.objects.create(
+            organization=template.organization,
+            template_name=f'{template.template_name} (copy)',
+            template_body=template.template_body,
+            kind=template.kind if template.kind != 'custom' else 'custom',
+            system_key=None,
+            is_deleted=False,
+        )
+        self.log_create(copy, action='duplicate', entity_type='supplier_template')
+        return Response(SupplierDocumentTemplateSerializer(copy).data)
 
 
 class SupplierViewSet(OrgViewSet):
     queryset = Supplier.objects.all().order_by('-updated_at')
     serializer_class = SupplierSerializer
     allowed_write_roles = BOTH_ADMINS
+    activity_module = 'suppliers'
 
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
@@ -358,6 +472,7 @@ class SupplierViewSet(OrgViewSet):
             organization=org,
             code=services.next_sequence(org, 'supplier', 'SUP'),
         )
+        self.log_create(serializer.instance)
 
     def perform_destroy(self, instance):
         from django.db import transaction
@@ -376,6 +491,7 @@ class SupplierViewSet(OrgViewSet):
                 user=self.request.user,
                 before={'code': instance.code, 'name': instance.name, 'status': instance.status},
             )
+        # Activity via money dual-write
 
     @action(detail=True, methods=['get'])
     def ledger(self, request, pk=None):
@@ -387,18 +503,22 @@ class SupplierProductViewSet(OrgViewSet):
     queryset = SupplierProduct.objects.all()
     serializer_class = SupplierProductSerializer
     allowed_write_roles = BOTH_ADMINS
+    activity_module = 'suppliers'
 
 
 class SupplierCategoryEntityViewSet(OrgViewSet):
     queryset = SupplierCategoryEntity.objects.all()
     serializer_class = SupplierCategoryEntitySerializer
     allowed_write_roles = BOTH_ADMINS
+    activity_module = 'suppliers'
 
 
 class PurchaseOrderViewSet(OrgViewSet):
     queryset = PurchaseOrder.objects.prefetch_related('items').all()
     serializer_class = PurchaseOrderSerializer
     allowed_write_roles = BOTH_ADMINS
+    activity_module = 'purchase_orders'
+    activity_enabled = False  # covered by money audit dual-write
 
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
@@ -446,6 +566,8 @@ class SupplierPaymentViewSet(OrgViewSet):
     serializer_class = SupplierPaymentSerializer
     # Both offices may record payments against supplier balances / كشف حساب
     allowed_write_roles = BOTH_ADMINS
+    activity_module = 'payments'
+    activity_enabled = False  # covered by money audit dual-write
 
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
@@ -513,6 +635,8 @@ class SupplierAdjustmentViewSet(OrgViewSet):
     queryset = SupplierAdjustment.objects.all()
     serializer_class = SupplierAdjustmentSerializer
     allowed_write_roles = BOTH_ADMINS
+    activity_module = 'adjustments'
+    activity_enabled = False  # covered by money audit dual-write
 
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
@@ -546,49 +670,63 @@ class SupplierDocumentViewSet(OrgViewSet):
     queryset = SupplierDocument.objects.all()
     serializer_class = SupplierDocumentSerializer
     allowed_write_roles = BOTH_ADMINS
+    activity_module = 'documents'
 
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
 
     def perform_destroy(self, instance):
         from django.utils import timezone
-
+        from api import activity as activity_mod
+        before = activity_mod.snapshot_fields(instance)
         instance.is_deleted = True
         instance.deleted_by = self.request.user
         instance.deleted_at = timezone.now()
         instance.save(update_fields=['is_deleted', 'deleted_by', 'deleted_at', 'updated_at'])
+        self.log_destroy(instance, before)
 
 
 class SupplierCommunicationViewSet(OrgViewSet):
     queryset = SupplierCommunication.objects.all()
     serializer_class = SupplierCommunicationSerializer
+    activity_module = 'suppliers'
 
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
 
     def perform_destroy(self, instance):
+        from api import activity as activity_mod
+        before = activity_mod.snapshot_fields(instance)
         instance.is_deleted = True
         instance.save(update_fields=['is_deleted', 'updated_at'])
+        self.log_destroy(instance, before)
 
 
 class SupplierTaskViewSet(OrgViewSet):
     queryset = SupplierTask.objects.all()
     serializer_class = SupplierTaskSerializer
+    activity_module = 'tasks'
 
     def get_queryset(self):
         return super().get_queryset().filter(is_deleted=False)
 
     def perform_destroy(self, instance):
+        from api import activity as activity_mod
+        before = activity_mod.snapshot_fields(instance)
         instance.is_deleted = True
         instance.save(update_fields=['is_deleted', 'updated_at'])
+        self.log_destroy(instance, before)
 
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         from django.utils import timezone
+        from api import activity as activity_mod
         task = self.get_object()
+        before = activity_mod.snapshot_fields(task)
         task.status = 'completed'
         task.completed_at = timezone.now()
         task.save()
+        self.log_update(task, before, action='status_change')
         return Response(SupplierTaskSerializer(task).data)
 
 
@@ -622,6 +760,7 @@ class CurrencyViewSet(OrgViewSet):
     queryset = Currency.objects.all()
     serializer_class = CurrencySerializer
     allowed_write_roles = BOTH_ADMINS
+    activity_module = 'calculator'
 
     @action(detail=True, methods=['post'])
     def set_default(self, request, pk=None):
@@ -635,6 +774,7 @@ class CurrencyViewSet(OrgViewSet):
 class ConversionRecordViewSet(OrgViewSet):
     queryset = ConversionRecord.objects.all()
     serializer_class = ConversionRecordSerializer
+    activity_module = 'calculator'
 
     def get_queryset(self):
         return super().get_queryset().order_by('-timestamp')[:200]
@@ -649,6 +789,7 @@ class ConversionRecordViewSet(OrgViewSet):
 class CalculatorRecordViewSet(OrgViewSet):
     queryset = CalculatorRecord.objects.all()
     serializer_class = CalculatorRecordSerializer
+    activity_module = 'calculator'
 
     def get_queryset(self):
         return super().get_queryset().order_by('-timestamp')[:100]
@@ -740,13 +881,13 @@ class BootstrapView(APIView):
             'user': UserSerializer(request.user).data,
             'organization': OrganizationSerializer(org).data,
             'goods': GoodsSerializer(goods_qs, many=True).data,
-            'agents': AgentSerializer(Agent.objects.filter(organization=org), many=True).data,
+            'agents': AgentSerializer(Agent.objects.filter(organization=org, is_deleted=False), many=True).data,
             'notifications': NotificationSerializer(notifications_qs, many=True).data,
             'templates': DocumentTemplateSerializer(
                 DocumentTemplate.objects.filter(organization=org), many=True
             ).data,
             'supplier_templates': SupplierDocumentTemplateSerializer(
-                SupplierDocumentTemplate.objects.filter(organization=org), many=True
+                SupplierDocumentTemplate.objects.filter(organization=org, is_deleted=False), many=True
             ).data,
             'suppliers': SupplierSerializer(suppliers_qs, many=True).data,
             'supplier_products': SupplierProductSerializer(products_qs, many=True).data,
@@ -802,7 +943,7 @@ class ResetDataView(APIView):
                 {'error': 'Data reset is disabled. Set ALLOW_DATA_RESET=True to enable.'},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if user_role(request.user) not in BOTH_ADMINS:
+        if user_role(request.user) not in ORG_ADMIN_ROLES:
             return Response(
                 {'error': 'Only an organization admin can reset organization data.'},
                 status=status.HTTP_403_FORBIDDEN,
@@ -817,8 +958,22 @@ class ResetDataView(APIView):
         ]
         for model in models_to_clear:
             model.objects.filter(organization=org).delete()
-        from api.management.commands.seed_demo import seed_organization
-        seed_organization(org)
+        # BusinessActivityEvent intentionally retained as immutable audit archive
+        from api.activity import record_activity
+        record_activity(
+            organization=org,
+            module='system',
+            action='update',
+            user=request.user,
+            entity_label='data-reset',
+            summary='Organization operational data reset (activity history retained)',
+            summary_ar='إعادة تعيين بيانات التشغيل (سجل النشاط محفوظ)',
+            summary_fr='Réinitialisation des données opérationnelles (historique conservé)',
+            source='system',
+            use_on_commit=False,
+        )
+        from api.management.commands.seed_demo import seed_system_defaults
+        seed_system_defaults(org)
         bootstrap = BootstrapView()
         bootstrap.request = request
         return bootstrap.get(request)

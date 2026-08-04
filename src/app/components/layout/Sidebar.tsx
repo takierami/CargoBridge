@@ -1,111 +1,177 @@
+import { useEffect, useRef } from 'react'
 import { NavLink } from 'react-router'
 import {
   LayoutDashboard, Package, Users, ScanLine, Calculator,
-  Settings, X, ChevronLeft, ChevronRight, Truck,
+  Settings, X, ChevronLeft, ChevronRight, Truck, History,
 } from 'lucide-react'
 import { useAppStore } from '../../../store/appStore'
 import { cn } from '../../utils/cn'
+import { TOUCH_ICON_BTN } from '../ui/responsive'
 
 export function Sidebar() {
-  const { t, language, sidebarOpen, setSidebarOpen, role, companyName } = useAppStore()
+  const {
+    t,
+    language,
+    sidebarCollapsed,
+    mobileNavOpen,
+    setSidebarCollapsed,
+    setMobileNavOpen,
+    role,
+    office,
+    companyName,
+  } = useAppStore()
   const isRTL = language === 'ar'
+  const desktopExpanded = !sidebarCollapsed
 
   const navItems = [
-    { to: '/', icon: LayoutDashboard, label: t('nav.dashboard'), end: true },
+    { to: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard'), end: true },
     { to: '/goods', icon: Package, label: t('nav.goods') },
     { to: '/suppliers', icon: Truck, label: t('nav.suppliers') },
     { to: '/agents', icon: Users, label: t('nav.agents') },
     { to: '/scanner', icon: ScanLine, label: t('nav.scanner') },
     { to: '/calculator', icon: Calculator, label: t('nav.calculator') },
+    { to: '/history', icon: History, label: t('nav.history') },
     { to: '/settings', icon: Settings, label: t('nav.settings') },
   ]
 
+  const closeBtnRef = useRef<HTMLButtonElement>(null)
+  const asideRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = () => {
+      if (mq.matches) setMobileNavOpen(false)
+    }
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [setMobileNavOpen])
+
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileNavOpen(false)
+      if (e.key === 'Tab' && asideRef.current) {
+        const focusable = asideRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        )
+        if (!focusable.length) return
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault()
+          last.focus()
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    closeBtnRef.current?.focus()
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [mobileNavOpen, setMobileNavOpen])
+
+  const closeMobile = () => setMobileNavOpen(false)
+
   return (
     <>
-      {/* Mobile overlay */}
-      {sidebarOpen && (
+      {mobileNavOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-20 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-20 bg-black/50 lg:hidden"
+          onClick={closeMobile}
+          aria-hidden
         />
       )}
 
-      {/* Sidebar */}
       <aside
+        ref={asideRef}
+        id="app-sidebar"
+        role={mobileNavOpen ? 'dialog' : undefined}
+        aria-modal={mobileNavOpen ? true : undefined}
+        aria-label={language === 'ar' ? 'القائمة' : 'Navigation'}
         className={cn(
-          'fixed lg:static inset-y-0 z-30 lg:z-auto flex flex-col',
-          'bg-gray-900 dark:bg-gray-950 text-white transition-all duration-300',
-          sidebarOpen ? 'w-64' : 'w-16',
+          'fixed inset-y-0 z-30 flex flex-col bg-gray-900 text-white transition-transform duration-300 ease-out dark:bg-gray-950',
+          'lg:static lg:z-auto lg:translate-x-0 lg:transition-[width] lg:duration-300',
+          desktopExpanded ? 'lg:w-64' : 'lg:w-16',
+          'w-64',
           isRTL ? 'right-0' : 'left-0',
-          !sidebarOpen && 'lg:flex hidden'
+          isRTL
+            ? mobileNavOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
+            : mobileNavOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700 dark:border-gray-800 min-h-[64px]">
-          {sidebarOpen && (
-            <div className="flex items-center gap-2 overflow-hidden">
-              <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
-                <Package className="w-4 h-4 text-white" />
-              </div>
-              <div className="overflow-hidden">
-                <p className="text-sm font-semibold truncate leading-tight">{companyName}</p>
-                <p className="text-xs text-gray-400">
-                  {role === 'china_admin' ? t('settings.roles.china_admin') : t('settings.roles.algeria_admin')}
-                </p>
-              </div>
+        <div className="flex min-h-16 items-center justify-between border-b border-gray-700 p-4 dark:border-gray-800 pt-[max(1rem,env(safe-area-inset-top))]">
+          <div className={cn('flex min-w-0 items-center gap-2 overflow-hidden', !desktopExpanded && 'lg:hidden')}>
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-blue-500">
+              <Package className="h-4 w-4 text-white" />
             </div>
-          )}
-          {!sidebarOpen && (
-            <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center mx-auto">
-              <Package className="w-4 h-4 text-white" />
+            <div className="min-w-0 overflow-hidden">
+              <p className="truncate text-sm font-semibold leading-tight">{companyName}</p>
+              <p className="text-xs text-gray-400">
+                {t(`settings.roles.${role}`)} · {office === 'algeria' ? t('settings.offices.algeria') : t('settings.offices.china')}
+              </p>
+            </div>
+          </div>
+          {!desktopExpanded && (
+            <div className="mx-auto hidden h-8 w-8 items-center justify-center rounded-lg bg-blue-500 lg:flex">
+              <Package className="h-4 w-4 text-white" />
             </div>
           )}
           <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="hidden lg:flex p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white transition-colors flex-shrink-0"
+            type="button"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className={cn(TOUCH_ICON_BTN, 'hidden flex-shrink-0 text-gray-400 hover:bg-gray-700 hover:text-white lg:flex')}
+            aria-label={desktopExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
           >
             {isRTL
-              ? (sidebarOpen ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />)
-              : (sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />)
-            }
+              ? (desktopExpanded ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />)
+              : (desktopExpanded ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />)}
           </button>
           <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-1 rounded hover:bg-gray-700 text-gray-400 hover:text-white"
+            ref={closeBtnRef}
+            type="button"
+            onClick={closeMobile}
+            className={cn(TOUCH_ICON_BTN, 'text-gray-400 hover:bg-gray-700 hover:text-white lg:hidden')}
+            aria-label={language === 'ar' ? 'إغلاق القائمة' : 'Close menu'}
           >
-            <X className="w-4 h-4" />
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 py-4 overflow-y-auto">
+        <nav className="flex-1 overflow-y-auto py-4">
           <ul className="space-y-1 px-2">
             {navItems.map(({ to, icon: Icon, label, end }) => (
               <li key={to}>
                 <NavLink
                   to={to}
                   end={end}
+                  onClick={closeMobile}
                   className={({ isActive }) =>
                     cn(
-                      'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group relative',
+                      'group relative flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 transition-all duration-150',
                       isActive
                         ? 'bg-blue-600 text-white'
                         : 'text-gray-400 hover:bg-gray-700 hover:text-white',
-                      !sidebarOpen && 'justify-center'
+                      !desktopExpanded && 'lg:justify-center',
                     )
                   }
                 >
-                  <div className="relative flex-shrink-0">
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  {sidebarOpen && (
-                    <span className="text-sm font-medium truncate">{label}</span>
-                  )}
-                  {!sidebarOpen && (
-                    <div className={cn(
-                      'absolute hidden group-hover:flex items-center px-2 py-1 bg-gray-800 text-white text-xs rounded shadow-lg whitespace-nowrap z-50',
-                      isRTL ? 'right-full me-2' : 'left-full ms-2'
-                    )}>
+                  <Icon className="h-5 w-5 flex-shrink-0" />
+                  <span className={cn('truncate text-sm font-medium', !desktopExpanded && 'lg:hidden')}>
+                    {label}
+                  </span>
+                  {!desktopExpanded && (
+                    <div
+                      className={cn(
+                        'absolute z-50 hidden items-center whitespace-nowrap rounded bg-gray-800 px-2 py-1 text-xs text-white shadow-lg group-hover:lg:flex',
+                        isRTL ? 'right-full me-2' : 'left-full ms-2',
+                      )}
+                    >
                       {label}
                     </div>
                   )}
@@ -115,12 +181,9 @@ export function Sidebar() {
           </ul>
         </nav>
 
-        {/* Footer */}
-        {sidebarOpen && (
-          <div className="p-4 border-t border-gray-700 dark:border-gray-800">
-            <p className="text-xs text-gray-500 text-center">CargoBridge v1.0</p>
-          </div>
-        )}
+        <div className={cn('border-t border-gray-700 p-4 dark:border-gray-800', !desktopExpanded && 'lg:hidden')}>
+          <p className="text-center text-xs text-gray-500">CargoBridge v1.0</p>
+        </div>
       </aside>
     </>
   )

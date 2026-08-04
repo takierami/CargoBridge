@@ -9,6 +9,7 @@ import { StatusBadge } from '../ui/StatusBadge'
 import { formatDistanceToNow } from '../../../utils/dateUtils'
 import { cn } from '../../utils/cn'
 import { getDashboardStats } from '../../../services/analyticsService'
+import { TradeTimeWidget } from '../trade-time/TradeTimeWidget'
 
 const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر']
 const MONTHS_FR = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
@@ -85,7 +86,7 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
   })
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
       <svg width="160" height="160" viewBox="0 0 160 160" className="flex-shrink-0">
         {slices.map((s, i) => (
           <circle
@@ -104,7 +105,7 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
         </text>
         <text x={cx} y={cy + 12} textAnchor="middle" fontSize="10" fill="#9ca3af">total</text>
       </svg>
-      <div className="flex-1 space-y-2 min-w-0">
+      <div className="w-full flex-1 space-y-2 min-w-0">
         {data.map((d, i) => (
           <div key={`dl-${i}-${d.label}`} className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: d.color }} />
@@ -160,32 +161,44 @@ function StatCard({ icon: Icon, label, value, color, sub, onClick }: {
   icon: React.ElementType; label: string; value: number | string
   color: string; sub?: string; onClick?: () => void
 }) {
-  return (
-    <div
-      onClick={onClick}
-      className={cn(
-        'bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 flex items-start gap-4',
-        onClick && 'cursor-pointer hover:shadow-md transition-shadow'
-      )}
-    >
-      <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0', color)}>
-        <Icon className="w-6 h-6 text-white" />
+  const content = (
+    <>
+      <div className={cn('w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0', color)}>
+        <Icon className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
       </div>
       <div className="min-w-0">
-        <p className="text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{label}</p>
+        <p className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">{value}</p>
+        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">{label}</p>
         {sub && (
           <p className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center gap-0.5">
             <TrendingUp className="w-3 h-3" />{sub}
           </p>
         )}
       </div>
+    </>
+  )
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border border-gray-200 dark:border-gray-700 flex items-start gap-3 sm:gap-4 w-full text-start cursor-pointer hover:shadow-md transition-shadow"
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-5 border border-gray-200 dark:border-gray-700 flex items-start gap-3 sm:gap-4">
+      {content}
     </div>
   )
 }
 
 export function Dashboard() {
-  const { t, language, goods, agents, suppliers, purchaseOrders, supplierPayments, supplierTasks, supplierRatings } = useAppStore()
+  const { t, language, goods, agents, suppliers, purchaseOrders, supplierPayments, supplierTasks, supplierRatings, companyName } = useAppStore()
   const navigate = useNavigate()
 
   const stats = useMemo(() => ({
@@ -193,7 +206,7 @@ export function Dashboard() {
     expected: goods.filter(g => ['in_transit', 'arrived'].includes(g.status)).length,
     delivered: goods.filter(g => g.status === 'delivered').length,
     delayed: goods.filter(g => g.status === 'delayed').length,
-    activeAgents: agents.filter(a => ['active', 'traveling'].includes(a.status)).length,
+    activeAgents: agents.filter(a => (a.employmentStatus || a.status) === 'active' || a.status === 'traveling').length,
   }), [goods, agents])
 
   const monthlyData = useMemo(() => {
@@ -254,12 +267,20 @@ export function Dashboard() {
     [suppliers, purchaseOrders, supplierPayments, supplierRatings, supplierTasks],
   )
 
+  const showOnboarding = goods.length === 0 && agents.length === 0 && suppliers.length === 0
+  const onboardingSteps = [
+    { done: !!companyName, label: t('settings.onboardingCompany'), to: '/settings' },
+    { done: suppliers.length > 0, label: t('settings.onboardingSupplier'), to: '/suppliers' },
+    { done: agents.length > 0, label: t('settings.onboardingAgent'), to: '/agents' },
+    { done: goods.length > 0, label: t('settings.onboardingGoods'), to: '/goods' },
+  ]
+
   return (
     <div className="p-4 lg:p-6 space-y-6">
       {/* Page title */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('dashboard.title')}</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{t('dashboard.title')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             {language === 'ar' ? 'نظرة شاملة على عمليات النقل' : "Vue d'ensemble des opérations"}
           </p>
@@ -272,14 +293,43 @@ export function Dashboard() {
         </div>
       </div>
 
+      {showOnboarding && (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 dark:border-sky-800 dark:bg-sky-950/40 sm:p-5">
+          <h2 className="mb-3 text-sm font-semibold text-sky-900 dark:text-sky-100">
+            {t('settings.onboardingTitle')}
+          </h2>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {onboardingSteps.map((step) => (
+              <li key={step.to}>
+                <button
+                  type="button"
+                  onClick={() => navigate(step.to)}
+                  className={cn(
+                    'flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-start text-sm transition-colors',
+                    step.done
+                      ? 'border-green-200 bg-white text-green-700 dark:border-green-800 dark:bg-gray-900 dark:text-green-400'
+                      : 'border-sky-200 bg-white text-sky-800 hover:bg-sky-100 dark:border-sky-700 dark:bg-gray-900 dark:text-sky-200',
+                  )}
+                >
+                  <CheckCircle2 className={cn('h-4 w-4', step.done ? 'opacity-100' : 'opacity-40')} />
+                  {step.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
         <StatCard icon={Package} label={t('dashboard.totalGoods')} value={stats.total} color="bg-blue-500" onClick={() => navigate('/goods')} />
         <StatCard icon={Clock} label={t('dashboard.expectedArrivals')} value={stats.expected} color="bg-amber-500" onClick={() => navigate('/goods')} />
         <StatCard icon={CheckCircle2} label={t('dashboard.deliveredGoods')} value={stats.delivered} color="bg-green-500" sub={`${successRate}%`} />
         <StatCard icon={AlertTriangle} label={t('dashboard.delayedGoods')} value={stats.delayed} color="bg-red-500" />
         <StatCard icon={Users} label={t('dashboard.activeAgents')} value={stats.activeAgents} color="bg-purple-500" onClick={() => navigate('/agents')} />
       </div>
+
+      <TradeTimeWidget />
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -342,16 +392,17 @@ export function Dashboard() {
             })}
           </div>
         </div>
+      </div>
 
-        {/* Supplier Stats Section */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Supplier Stats Section */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div onClick={() => navigate('/suppliers/analytics')} className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-200 dark:border-gray-700 cursor-pointer hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/20 flex items-center justify-center">
                 <DollarSign className="w-5 h-5 text-red-500" />
               </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{supplierStats.totalOutstanding.toLocaleString()}</p>
+              <div className="min-w-0">
+                <p className="text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">{supplierStats.totalOutstanding.toLocaleString()}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{t('suppliers.outstandingBalance')}</p>
               </div>
             </div>
@@ -361,8 +412,8 @@ export function Dashboard() {
               <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center">
                 <Clock className="w-5 h-5 text-amber-500" />
               </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{supplierStats.delayedPOs}</p>
+              <div className="min-w-0">
+                <p className="text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">{supplierStats.delayedPOs}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{t('suppliers.delayedPOs')}</p>
               </div>
             </div>
@@ -372,8 +423,8 @@ export function Dashboard() {
               <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
                 <AlertTriangle className="w-5 h-5 text-orange-500" />
               </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{supplierStats.overdueTasks}</p>
+              <div className="min-w-0">
+                <p className="text-xl font-bold text-gray-900 dark:text-white sm:text-2xl">{supplierStats.overdueTasks}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{t('suppliers.overdueTasks')}</p>
               </div>
             </div>
@@ -400,7 +451,7 @@ export function Dashboard() {
                       navigate(`/suppliers/${s.supplierId}`)
                     }
                   }}
-                  className="flex items-center justify-between text-xs rounded-md px-1 -mx-1 py-0.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                  className="flex items-center justify-between text-xs rounded-md px-1 -mx-1 py-1.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
                 >
                   <span className="text-gray-700 dark:text-gray-300 truncate max-w-[100px] hover:text-blue-600 dark:hover:text-blue-400">{s.supplierName}</span>
                   <span className="text-gray-500 font-mono">{s.spend.toLocaleString()}</span>
@@ -411,7 +462,6 @@ export function Dashboard() {
               )}
             </div>
           </div>
-        </div>
       </div>
     </div>
   )

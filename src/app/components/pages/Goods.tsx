@@ -18,6 +18,8 @@ import { isOrgAdmin } from '../../../lib/roles'
 import { AgentQuickCreate } from '../quick-create/AgentQuickCreate'
 import { CurrencyQuickCreate } from '../quick-create/CurrencyQuickCreate'
 import { currenciesForSelect, currencyOptionLabel } from '../../../lib/currencies'
+import { ResponsiveDataList } from '../ui/ResponsiveDataList'
+import { FILTER_INPUT, INPUT_TOUCH, MODAL_BODY, MODAL_FOOTER, MODAL_SHELL, TOUCH_ICON_BTN } from '../ui/responsive'
 
 const ALL_TRANSPORT_TYPES: TransportType[] = ['air', 'sea', 'land', 'express', 'other']
 
@@ -111,16 +113,16 @@ export function GoodsForm({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
+      <div className={cn(MODAL_SHELL, 'max-w-lg')}>
+        <div className="flex shrink-0 items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
           <h2 className="font-semibold text-gray-900 dark:text-white">
             {isEdit ? t('goods.editGoods') : t('goods.addGoods')}
           </h2>
-          <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500">
+          <button type="button" onClick={onCancel} className={TOUCH_ICON_BTN}>
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="p-5 space-y-4">
+        <div className={MODAL_BODY}>
           {!isEdit && (
             <p className="text-xs text-gray-500 dark:text-gray-400 rounded-lg bg-gray-50 dark:bg-gray-900/40 px-3 py-2">
               {t('goods.statusLockedCreate')}
@@ -168,13 +170,13 @@ export function GoodsForm({
               )}
             </div>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.description')} * (عربي)</label>
               <input
                 value={form.description}
                 onChange={e => set('description', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={INPUT_TOUCH}
               />
             </div>
             <div>
@@ -184,41 +186,41 @@ export function GoodsForm({
                 onChange={e => set('descriptionFr', e.target.value)}
                 dir="ltr"
                 placeholder="ex: Smartphones Samsung"
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={INPUT_TOUCH}
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.category')}</label>
               <select value={form.category} onChange={e => set('category', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
+                className={INPUT_TOUCH}>
                 {ALL_CATEGORIES.map(c => <option key={c} value={c}>{t(`goods.categories.${c}`)}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.priority')}</label>
               <select value={form.priority} onChange={e => set('priority', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
+                className={INPUT_TOUCH}>
                 {(['low','medium','high'] as Priority[]).map(p => <option key={p} value={p}>{t(`goods.priorities.${p}`)}</option>)}
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.quantity')}</label>
               <input type="number" min="1" value={form.quantity} onChange={e => set('quantity', Number(e.target.value))}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                className={INPUT_TOUCH} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.weight')}</label>
               <input type="number" value={form.weight} onChange={e => set('weight', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                className={INPUT_TOUCH} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.value')}</label>
               <input type="number" value={form.value} onChange={e => set('value', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                className={INPUT_TOUCH} />
             </div>
           </div>
           <div>
@@ -228,7 +230,7 @@ export function GoodsForm({
                 key={currencyListTick}
                 value={form.valueCurrency}
                 onChange={e => set('valueCurrency', e.target.value)}
-                className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500"
+                className={INPUT_TOUCH}
               >
                 {currenciesForSelect(form.valueCurrency).map(c => (
                   <option key={c.code} value={c.code}>{currencyOptionLabel(c.code, language)}</option>
@@ -251,7 +253,7 @@ export function GoodsForm({
             <div className="flex gap-2">
               <select value={form.agentId} onChange={e => set('agentId', e.target.value)}
                 disabled={!isOrgAdmin(role)}
-                className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 disabled:opacity-60">
+                className={`${INPUT_TOUCH} disabled:opacity-60`}>
                 {!agentLocked && <option value="">{t('goods.noAgent')}</option>}
                 {agents.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
@@ -267,16 +269,16 @@ export function GoodsForm({
               )}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.hsCode')}</label>
               <input value={form.hsCode} onChange={e => set('hsCode', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                className={INPUT_TOUCH} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.incoterm')}</label>
               <select value={form.incoterm} onChange={e => set('incoterm', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
+                className={INPUT_TOUCH}>
                 <option value="">—</option>
                 {['EXW','FCA','FOB','CFR','CIF','CPT','CIP','DAP','DPU','DDP'].map(c => (
                   <option key={c} value={c}>{c}</option>
@@ -284,62 +286,62 @@ export function GoodsForm({
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.freightCost')}</label>
               <input type="number" value={form.freightCost} onChange={e => set('freightCost', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                className={INPUT_TOUCH} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.insuranceCost')}</label>
               <input type="number" value={form.insuranceCost} onChange={e => set('insuranceCost', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                className={INPUT_TOUCH} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.dutyAmount')}</label>
               <input type="number" value={form.dutyAmount} onChange={e => set('dutyAmount', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                className={INPUT_TOUCH} />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.transportType')}</label>
             <select value={form.transportType} onChange={e => set('transportType', e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500">
+              className={INPUT_TOUCH}>
               <option value="">{language === 'ar' ? 'اختر نوع النقل' : 'Choisir le transport'}</option>
               {ALL_TRANSPORT_TYPES.map(tp => <option key={tp} value={tp}>{t(`goods.transportTypes.${tp}`)}</option>)}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.departureDate')}</label>
               <input type="date" value={form.departureDate} onChange={e => set('departureDate', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                className={INPUT_TOUCH} />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.expectedArrival')}</label>
               <input type="date" value={form.expectedArrivalDate} onChange={e => set('expectedArrivalDate', e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
+                className={INPUT_TOUCH} />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('goods.notes')} (عربي)</label>
             <textarea value={form.notes} onChange={e => set('notes', e.target.value)} rows={2}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 resize-none" />
+              className={`${INPUT_TOUCH} resize-none`} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes (Français)</label>
             <textarea value={form.notesFr} onChange={e => set('notesFr', e.target.value)} rows={2} dir="ltr"
               placeholder="ex: Garantie d'un an incluse"
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 resize-none" />
+              className={`${INPUT_TOUCH} resize-none`} />
           </div>
         </div>
-        <div className="flex gap-3 p-5 border-t border-gray-200 dark:border-gray-700">
-          <button onClick={() => onSave(buildPayload())}
-            className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
-            {t('common.save')}
-          </button>
-          <button onClick={onCancel} className="flex-1 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors">
+        <div className={MODAL_FOOTER}>
+          <button type="button" onClick={onCancel} className="flex-1 min-h-11 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium transition-colors">
             {t('common.cancel')}
+          </button>
+          <button type="button" onClick={() => onSave(buildPayload())}
+            className="flex-1 min-h-11 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors">
+            {t('common.save')}
           </button>
         </div>
       </div>
@@ -470,7 +472,7 @@ export function Goods() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('goods.title')}</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{t('goods.title')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">{filtered.length} {t('common.records')}</p>
         </div>
         <div className="flex gap-2">
@@ -484,7 +486,7 @@ export function Goods() {
           {isOrgAdmin(role) && (
             <button
               onClick={() => { setEditItem(null); setShowForm(true) }}
-              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
             >
               <Plus className="w-4 h-4" />
               {t('goods.addGoods')}
@@ -501,16 +503,16 @@ export function Goods() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={t('goods.searchPlaceholder')}
-            className="w-full ps-9 pe-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className={FILTER_INPUT}
           />
         </div>
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-          className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:ring-2 focus:ring-blue-500">
+          className="min-h-11 px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-base sm:text-sm focus:ring-2 focus:ring-blue-500">
           <option value="all">{t('common.all')}</option>
           {ALL_STATUSES.map(s => <option key={s} value={s}>{t(`goods.statuses.${s}`)}</option>)}
         </select>
         <select value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}
-          className="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm focus:ring-2 focus:ring-blue-500">
+          className="min-h-11 px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-base sm:text-sm focus:ring-2 focus:ring-blue-500">
           <option value="all">{t('common.all')}</option>
           {(['low','medium','high'] as Priority[]).map(p => <option key={p} value={p}>{t(`goods.priorities.${p}`)}</option>)}
         </select>
@@ -531,89 +533,129 @@ export function Goods() {
           <p>{t('goods.noGoods')}</p>
         </div>
       ) : viewMode === 'list' ? (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('goods.trackingNumber')}</th>
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('goods.description')}</th>
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('goods.agent')}</th>
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('goods.status')}</th>
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('goods.priority')}</th>
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('goods.expectedArrival')}</th>
-                  <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('common.actions')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((g) => {
-                  const agent = agents.find(a => a.id === g.agentId)
-                  return (
-                    <tr key={g.id} className="border-b border-gray-100 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-750">
-                      <td className="px-4 py-3">
-                        <span className="text-sm font-mono font-medium text-blue-600 dark:text-blue-400">{g.trackingNumber}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">{g.description}</p>
-                          <p className="text-xs text-gray-500">{t(`goods.categories.${g.category}`)} · {g.quantity} {t('goods.pieces')}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm text-gray-700 dark:text-gray-300">{agent?.name || t('goods.noAgent')}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={g.status} type="goods" label={t(`goods.statuses.${g.status}`)} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <PriorityBadge priority={g.priority} label={t(`goods.priorities.${g.priority}`)} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">{formatDate(g.expectedArrivalDate, language)}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          {/* Receipt — full labeled button, separated */}
-                          <button
-                            onClick={() => { setReceiptGoods(g); setReceiptType(g.status === 'delivered' || g.status === 'arrived' ? 'delivery' : 'reception') }}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 text-xs font-medium transition-colors whitespace-nowrap"
-                            title={t('receipts.preview')}
-                          >
-                            <Receipt className="w-3.5 h-3.5" />
-                            {language === 'ar' ? 'وصل' : 'Reçu'}
-                          </button>
-                          <button
-                            onClick={() => handleGenerateQr(g)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 text-xs font-medium transition-colors whitespace-nowrap"
-                            title={t('goods.generateQr')}
-                          >
-                            <QrCode className="w-3.5 h-3.5" />
-                            {t('goods.generateQr')}
-                          </button>
-                          {/* Divider */}
-                          <div className="w-px h-5 bg-gray-200 dark:bg-gray-600" />
-                          {/* View / Edit / Delete — icon-only group */}
-                          <div className="flex items-center gap-0.5">
-                            <button onClick={() => navigate(`/goods/${g.id}`)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-blue-600" title={t('common.view')}>
-                              <Eye className="w-3.5 h-3.5" />
+        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden md:p-0 p-0">
+          <ResponsiveDataList
+            rows={filtered}
+            keyField={(g) => g.id}
+            empty={null}
+            className="md:contents"
+            table={
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                    <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('goods.trackingNumber')}</th>
+                    <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('goods.description')}</th>
+                    <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('goods.agent')}</th>
+                    <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('goods.status')}</th>
+                    <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('goods.priority')}</th>
+                    <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('goods.expectedArrival')}</th>
+                    <th className="text-start px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('common.actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((g) => {
+                    const agent = agents.find(a => a.id === g.agentId)
+                    return (
+                      <tr key={g.id} className="border-b border-gray-100 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-750">
+                        <td className="px-4 py-3">
+                          <span className="text-sm font-mono font-medium text-blue-600 dark:text-blue-400">{g.trackingNumber}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-white">{g.description}</p>
+                            <p className="text-xs text-gray-500">{t(`goods.categories.${g.category}`)} · {g.quantity} {t('goods.pieces')}</p>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{agent?.name || t('goods.noAgent')}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <StatusBadge status={g.status} type="goods" label={t(`goods.statuses.${g.status}`)} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <PriorityBadge priority={g.priority} label={t(`goods.priorities.${g.priority}`)} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">{formatDate(g.expectedArrivalDate, language)}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => { setReceiptGoods(g); setReceiptType(g.status === 'delivered' || g.status === 'arrived' ? 'delivery' : 'reception') }}
+                              className={cn(TOUCH_ICON_BTN, 'text-green-600')}
+                              title={t('receipts.preview')}
+                            >
+                              <Receipt className="w-4 h-4" />
                             </button>
-                            <button onClick={() => { setEditItem(g); setShowForm(true) }} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-amber-600" title={t('common.edit')}>
-                              <Pencil className="w-3.5 h-3.5" />
+                            <button type="button" onClick={() => handleGenerateQr(g)} className={cn(TOUCH_ICON_BTN, 'text-violet-600')} title={t('goods.generateQr')}>
+                              <QrCode className="w-4 h-4" />
+                            </button>
+                            <button type="button" onClick={() => navigate(`/goods/${g.id}`)} className={TOUCH_ICON_BTN} title={t('common.view')}>
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <button type="button" onClick={() => { setEditItem(g); setShowForm(true) }} className={TOUCH_ICON_BTN} title={t('common.edit')}>
+                              <Pencil className="w-4 h-4" />
                             </button>
                             {isOrgAdmin(role) && (
-                              <button onClick={() => handleDelete(g.id)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 hover:text-red-600" title={t('common.delete')}>
-                                <Trash2 className="w-3.5 h-3.5" />
+                              <button type="button" onClick={() => handleDelete(g.id)} className={cn(TOUCH_ICON_BTN, 'text-red-500')} title={t('common.delete')}>
+                                <Trash2 className="w-4 h-4" />
                               </button>
                             )}
                           </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            }
+            renderCard={(g) => {
+              const agent = agents.find(a => a.id === g.agentId)
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-mono font-medium text-blue-600 dark:text-blue-400">{g.trackingNumber}</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">{g.description}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{t(`goods.categories.${g.category}`)} · {g.quantity} {t('goods.pieces')}</p>
+                    </div>
+                    <PriorityBadge priority={g.priority} label={t(`goods.priorities.${g.priority}`)} />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <StatusBadge status={g.status} type="goods" label={t(`goods.statuses.${g.status}`)} />
+                    <span className="text-xs text-gray-500">{agent?.name || t('goods.noAgent')}</span>
+                  </div>
+                  <p className="text-xs text-gray-500">{t('goods.expectedArrival')}: {formatDate(g.expectedArrivalDate, language)}</p>
+                  <div className="flex flex-col gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => { setReceiptGoods(g); setReceiptType(g.status === 'delivered' || g.status === 'arrived' ? 'delivery' : 'reception') }}
+                      className="min-h-11 w-full flex items-center justify-center gap-1.5 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 text-sm font-medium"
+                    >
+                      <Receipt className="w-4 h-4" />
+                      {language === 'ar' ? 'إنشاء وصل' : 'Générer un reçu'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateQr(g)}
+                      className="min-h-11 w-full flex items-center justify-center gap-1.5 rounded-lg bg-violet-50 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 text-sm font-medium"
+                    >
+                      <QrCode className="w-4 h-4" />
+                      {t('goods.generateQr')}
+                    </button>
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => navigate(`/goods/${g.id}`)} className="flex-1 min-h-11 text-sm text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg">{t('common.view')}</button>
+                      <button type="button" onClick={() => { setEditItem(g); setShowForm(true) }} className="flex-1 min-h-11 text-sm text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg">{t('common.edit')}</button>
+                      {isOrgAdmin(role) && (
+                        <button type="button" onClick={() => handleDelete(g.id)} className="flex-1 min-h-11 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg">{t('common.delete')}</button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            }}
+          />
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -679,7 +721,7 @@ export function Goods() {
               {manifestAgent && (
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 mb-4">
                   <p className="font-semibold text-gray-900 dark:text-white">{manifestAgent.name}</p>
-                  <div className="grid grid-cols-3 gap-3 mt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 mt-2">
                     <div className="text-center">
                       <p className="text-xl font-bold text-blue-600">{manifestGoods.length}</p>
                       <p className="text-xs text-gray-500">{t('goods.goodsCount')}</p>

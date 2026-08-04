@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router'
+import { useNavigate, useSearchParams, Link } from 'react-router'
 import { Package, Loader2, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuthStore } from '../../../store/authStore'
 import { useAppStore } from '../../../store/appStore'
 import { sanitizeNextPath } from '../../../lib/authRedirect'
-import { isApiBaseUnreachableFromBrowser } from '../../../lib/apiBase'
 import { cn } from '../../utils/cn'
 
 export function Login() {
@@ -33,9 +32,9 @@ export function Login() {
         success: 'تم تسجيل الدخول بنجاح',
         badCreds: 'اسم المستخدم أو كلمة المرور غير صحيحة',
         network: 'تعذّر الاتصال بالخادم. حاول مرة أخرى.',
-        adminNote: 'الحساب يُنشأ بواسطة المسؤول — لا يوجد تسجيل ذاتي.',
-        apiMisconfigured:
-          'لم يُضبط عنوان الـ API (VITE_API_URL). عيّنه في إعدادات Netlify ثم أعد النشر — تسجيل الدخول لن يعمل بدون ذلك.',
+        adminNote: 'حساب جديد؟ سجّل شركتك — أو اطلب دعوة من المالك.',
+        register: 'إنشاء حساب شركة',
+        forgot: 'نسيت كلمة المرور؟',
         show: 'إظهار',
         hide: 'إخفاء',
       }
@@ -48,9 +47,9 @@ export function Login() {
         success: 'Connexion réussie',
         badCreds: "Nom d'utilisateur ou mot de passe incorrect",
         network: 'Impossible de joindre le serveur. Réessayez.',
-        adminNote: "Compte créé par l'administrateur — pas d'inscription publique.",
-        apiMisconfigured:
-          "VITE_API_URL n'est pas configuré. Définissez-le dans Netlify (Environment variables) puis redéployez — la connexion ne fonctionnera pas sinon.",
+        adminNote: 'Nouveau ? Créez votre entreprise — ou demandez une invitation.',
+        register: "Créer un compte entreprise",
+        forgot: 'Mot de passe oublié ?',
         show: 'Afficher',
         hide: 'Masquer',
       }
@@ -83,7 +82,7 @@ export function Login() {
 
   return (
     <div
-      className="relative min-h-screen flex items-center justify-center overflow-hidden px-4 py-10"
+      className="relative min-h-dvh flex items-center justify-center overflow-hidden px-4 py-10 pt-[max(2.5rem,env(safe-area-inset-top))] pb-[max(2.5rem,env(safe-area-inset-bottom))]"
       dir={isRTL ? 'rtl' : 'ltr'}
     >
       <div
@@ -116,15 +115,6 @@ export function Login() {
           <p className="mt-3 text-sm text-slate-400 sm:text-base">{copy.tagline}</p>
         </div>
 
-        {isApiBaseUnreachableFromBrowser() && (
-          <div
-            role="alert"
-            className="mb-4 rounded-xl border border-amber-400/40 bg-amber-500/15 px-4 py-3 text-sm text-amber-100"
-          >
-            {copy.apiMisconfigured}
-          </div>
-        )}
-
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-md sm:p-8">
           <div className="mb-6 flex items-center justify-between gap-3">
             <h2 className="text-lg font-medium text-white">{copy.title}</h2>
@@ -135,7 +125,7 @@ export function Login() {
                   type="button"
                   onClick={() => setLanguage(lang)}
                   className={cn(
-                    'rounded-md px-2.5 py-1 text-xs font-medium uppercase transition-colors',
+                    'min-h-11 min-w-11 rounded-md px-2.5 text-xs font-medium uppercase transition-colors',
                     language === lang
                       ? 'bg-sky-500 text-white'
                       : 'text-slate-400 hover:text-white',
@@ -158,7 +148,7 @@ export function Login() {
                 autoFocus
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none ring-sky-500/40 transition focus:border-sky-500/50 focus:ring-2"
+                className="w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 text-base text-white placeholder:text-slate-500 outline-none ring-sky-500/40 transition focus:border-sky-500/50 focus:ring-2 sm:text-sm"
               />
             </div>
 
@@ -173,15 +163,15 @@ export function Login() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 pe-11 text-sm text-white placeholder:text-slate-500 outline-none ring-sky-500/40 transition focus:border-sky-500/50 focus:ring-2"
+                  className="w-full rounded-xl border border-white/10 bg-black/30 px-3.5 py-2.5 pe-12 text-base text-white placeholder:text-slate-500 outline-none ring-sky-500/40 transition focus:border-sky-500/50 focus:ring-2 sm:text-sm"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  className="absolute inset-y-0 end-0 flex items-center px-3 text-slate-400 hover:text-white"
+                  className="absolute end-1 top-1/2 inline-flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:text-white"
                   aria-label={showPassword ? copy.hide : copy.show}
                 >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="w-4 w-4" />}
                 </button>
               </div>
             </div>
@@ -202,8 +192,14 @@ export function Login() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-xs leading-relaxed text-slate-500">
-            {copy.adminNote}
+          <p className="mt-6 space-y-2 text-center text-xs leading-relaxed text-slate-500">
+            <span className="block">{copy.adminNote}</span>
+            <Link to="/register" className="block text-sky-400 hover:underline">
+              {copy.register}
+            </Link>
+            <Link to="/forgot-password" className="block text-sky-400/80 hover:underline">
+              {copy.forgot}
+            </Link>
           </p>
         </div>
       </div>

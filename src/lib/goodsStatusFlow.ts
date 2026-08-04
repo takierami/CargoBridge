@@ -13,7 +13,7 @@ export const GOODS_STATUS_FLOW: Record<GoodsStatus, GoodsStatus[]> = {
   cancelled: ['draft'],
 }
 
-/** Mirrors backend GOODS_ROLE_ALLOWED_STATUSES — both admins share the full set. */
+/** Mirrors backend status caps — writers share the full set. */
 const ADMIN_GOODS_STATUSES = new Set<GoodsStatus>([
   'assigned',
   'ready_for_departure',
@@ -26,9 +26,14 @@ const ADMIN_GOODS_STATUSES = new Set<GoodsStatus>([
   'delivered',
 ])
 
-export const GOODS_ROLE_ALLOWED_STATUSES: Record<UserRole, Set<GoodsStatus>> = {
+export const GOODS_ROLE_ALLOWED_STATUSES: Record<string, Set<GoodsStatus>> = {
+  owner: new Set(ADMIN_GOODS_STATUSES),
+  admin: new Set(ADMIN_GOODS_STATUSES),
+  manager: new Set(ADMIN_GOODS_STATUSES),
+  employee: new Set(ADMIN_GOODS_STATUSES),
   china_admin: new Set(ADMIN_GOODS_STATUSES),
   algeria_admin: new Set(ADMIN_GOODS_STATUSES),
+  readonly: new Set(),
 }
 
 export const GOODS_STATUS_ACTION_KEYS: Record<string, string> = {
@@ -60,7 +65,7 @@ export interface GoodsStatusAction {
 
 export function allowedGoodsActions(
   current: GoodsStatus,
-  role: UserRole | null | undefined,
+  role: UserRole | string | null | undefined,
 ): GoodsStatusAction[] {
   const candidates = GOODS_STATUS_FLOW[current] || []
   const roleSet = role ? GOODS_ROLE_ALLOWED_STATUSES[role] : null

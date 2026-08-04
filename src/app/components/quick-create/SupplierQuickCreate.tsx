@@ -80,7 +80,7 @@ export function SupplierQuickCreate({ onSave, onCancel, nested }: Props) {
 
   return (
     <div className={`fixed inset-0 bg-black/50 ${nested ? 'z-[60]' : 'z-50'} flex items-center justify-center p-4`}>
-      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-2xl">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
           <h2 className="font-semibold text-gray-900 dark:text-white">{t('common.addNew')} — {t('suppliers.addSupplier')}</h2>
           <button type="button" onClick={onCancel} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500">
@@ -98,7 +98,7 @@ export function SupplierQuickCreate({ onSave, onCancel, nested }: Props) {
             <input value={form.nameFr} onChange={e => set('nameFr', e.target.value)} dir="ltr"
               className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('suppliers.country')}</label>
               <input value={form.country} onChange={e => set('country', e.target.value)}

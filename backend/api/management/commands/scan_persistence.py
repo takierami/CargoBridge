@@ -11,7 +11,9 @@ import uuid
 from datetime import date
 from decimal import Decimal
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -84,21 +86,23 @@ class Command(BaseCommand):
             'password': 'ScanTest123!',
             'company_name': f'Scan Org {suffix}',
             'company_name_fr': f'Scan Org FR {suffix}',
-            'role': 'china_admin',
+            'role': 'admin',
+            'office': 'china',
         })
         if not reg.is_valid():
             raise SystemExit(f'RegisterSerializer failed: {reg.errors}')
         user = reg.save()
         org = user.profile.organization
         self._check('Organization.name', org.name, f'Scan Org {suffix}')
-        self._check('UserProfile.role', user.profile.role, 'china_admin')
+        self._check('UserProfile.role', user.profile.role, 'admin')
+        self._check('UserProfile.office', user.profile.office, 'china')
 
         algeria = User.objects.create_user(
             username=f'{username}_dz',
             email=f'{username}_dz@scan.test',
             password='ScanTest123!',
         )
-        UserProfile.objects.create(user=algeria, organization=org, role='algeria_admin')
+        UserProfile.objects.create(user=algeria, organization=org, role='admin', office='algeria')
 
         try:
             agent = self._scan_agent(org)
@@ -222,7 +226,7 @@ class Command(BaseCommand):
             goods,
             new_status='assigned',
             user=china_user,
-            role='china_admin',
+            role='admin', office='china',
             notes='assigned in scan',
             record_scan=True,
             qr=qr,

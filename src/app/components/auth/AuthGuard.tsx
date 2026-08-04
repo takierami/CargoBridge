@@ -24,8 +24,11 @@ export function AuthGuard() {
 
   useEffect(() => {
     if (!checking && !isAuthenticated) {
-      const next = sanitizeNextPath(`${location.pathname}${location.search}`)
-      const loginPath = next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`
+      const raw = `${location.pathname}${location.search}`
+      const loginPath =
+        location.pathname === '/dashboard' && !location.search
+          ? '/login'
+          : `/login?next=${encodeURIComponent(sanitizeNextPath(raw))}`
       navigate(loginPath, { replace: true })
     }
   }, [checking, isAuthenticated, navigate, location.pathname, location.search])

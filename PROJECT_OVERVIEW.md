@@ -302,7 +302,7 @@ Custom actions typically include status transitions (goods/PO/customs), QR gener
 - **`appStore`** — the big store: language/theme/role/company, all domain collections (goods, agents, suppliers, POs, payments, etc.), the translation function `t`, and actions. Uses `persist` for UI prefs.
 
 ### API client (`src/lib/`)
-- **`apiBase.ts`** — `API_BASE` from `import.meta.env.VITE_API_URL` (fallback `http://127.0.0.1:8001/api`); `isApiBaseUnreachableFromBrowser()` warns when the API URL is localhost (used to show the Netlify config banner on the login page).
+- **`apiBase.ts`** — `API_BASE` from `import.meta.env.VITE_API_URL` (dev fallback `/api` via Vite proxy; Contabo production should bake `/api` for same-origin nginx).
 - **`apiClient.ts`** — `request()` wrapper: injects `Authorization: Bearer`, JSON handling, **auto-refresh on 401**, error message extraction, plus `api.get/getList/post/patch/delete` and `fetchBootstrap()`. Also `caseTransform` maps snake_case ⇄ camelCase between API and UI.
 - **`services/*`** — one module per domain (goodsService, supplierService, paymentService, currencyService, etc.) wrapping the client.
 
@@ -371,9 +371,18 @@ python manage.py runserver 127.0.0.1:8001
 ```bash
 # repo root; .env → VITE_API_URL=http://127.0.0.1:8001/api
 pnpm install
-pnpm run dev            # serves http://localhost:3025 (vite.config default)
+pnpm run dev            # HTTP on http://localhost:3025 (and LAN IP)
 ```
-Make sure the dev server's origin/port is present in the backend's `CORS_ALLOWED_ORIGINS`.
+Make sure the dev server's origin/port is present in the backend's `CORS_ALLOWED_ORIGINS`
+(include both `http://` and `https://` for localhost / 127.0.0.1 / LAN if needed).
+
+**Mobile camera (Scanner):** browsers only show the OS camera permission prompt in a
+**secure context** (HTTPS or localhost). For phone testing on the same Wi‑Fi:
+
+1. Run `pnpm run dev` and note the Network URL (`https://192.168.x.x:3025/`).
+2. On the phone, open that HTTPS URL and accept the self-signed certificate warning once.
+3. Open Scanner → Start camera → Allow — Android/iOS should show the system camera prompt.
+4. Opening `http://192.168.x.x:…` will **not** prompt for camera; the UI shows an HTTPS tip instead.
 
 ### Useful management commands (`backend/api/management/commands`)
 - `seed_demo` — seed demo data for an org.
@@ -389,16 +398,14 @@ Cover finance integrity, concurrency/balance, goods status flow, workflow integr
 
 ## 12. Deployment
 
-### Frontend → Netlify (`netlify.toml`)
-- Build: `pnpm run build` → publish `dist/`. Node 20, pnpm 10.29.2.
-- SPA fallback: `/* → /index.html 200` (also in `public/_redirects`).
-- Security headers + long-lived asset caching configured.
-- **Required**: set `VITE_API_URL` in Netlify → Site settings → Environment variables (with `/api`). If unset, build still succeeds but the app falls back to localhost and shows a warning banner — login won't work.
+### Frontend deploy
+- Preferred (Contabo): build with `VITE_API_URL=/api`, serve `dist/` (or `frontend-build/`) from nginx; proxy `/api/` to Gunicorn.
+- Optional Netlify + separate API: see `NETLIFY.md` (legacy). Set `VITE_API_URL` to the absolute API base ending in `/api` at build time.
 
-### Backend → separate host
-Deploy `backend/` with PostgreSQL; set production env (`DJANGO_DEBUG=False`, strong `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, DB creds, and `CORS_ALLOWED_ORIGINS` including the Netlify URL). API must be reachable at `https://<host>/api/`.
+### Backend → VPS / separate host
+Deploy `backend/` with PostgreSQL; set production env (`DJANGO_DEBUG=False`, strong `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, DB creds, and `CORS_ALLOWED_ORIGINS` if the SPA is on another origin). Same-origin Contabo needs CORS only for extra frontends.
 
-See `NETLIFY.md` for the full deployment checklist.
+See `deploy/nginx_cargobridge.conf` for path-based Contabo layout; `NETLIFY.md` only if still using Netlify.
 
 ---
 

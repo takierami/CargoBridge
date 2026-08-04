@@ -6,6 +6,7 @@ import { useAppStore } from '../../../store/appStore'
 import { cn } from '../../utils/cn'
 import { buildLedger } from '../../../services/paymentService'
 import type { LedgerEntry, LedgerEntryType } from '../../../types'
+import { ResponsiveDataList } from '../ui/ResponsiveDataList'
 
 const LEDGER_TYPES: LedgerEntryType[] = ['order', 'payment', 'credit_adjustment', 'debit_adjustment']
 
@@ -98,7 +99,7 @@ export function AccountStatement() {
             <span className="text-sm">{t('common.back')}</span>
           </button>
           <div>
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('suppliers.accountStatement')}</h1>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{t('suppliers.accountStatement')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">{supplier.name} — {supplier.code}</p>
           </div>
         </div>
@@ -158,42 +159,79 @@ export function AccountStatement() {
           <p className="text-xs mt-2 max-w-sm mx-auto opacity-80">{t('suppliers.statementEmptyHint')}</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-900/50">
-              <tr>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.ledgerCols.date')}</th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.ledgerCols.type')}</th>
-                <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.ledgerCols.reference')}</th>
-                <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('suppliers.ledgerCols.debit')}</th>
-                <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('suppliers.ledgerCols.credit')}</th>
-                <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('suppliers.ledgerCols.runningBalance')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {ledger.map((entry, idx) => (
-                <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
-                  <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{entry.date}</td>
-                  <td className="px-5 py-4 text-sm">
-                    <span className={cn(
-                      'px-2.5 py-1 rounded-full text-xs font-medium',
-                      entry.type === 'order' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                      entry.type === 'payment' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                      entry.type === 'credit_adjustment' ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' :
-                      'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
-                    )}>
-                      {t('suppliers.ledgerTypes.' + entry.type)}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-sm font-mono text-gray-900 dark:text-white">{entry.reference}</td>
-                  <td className="px-5 py-4 text-end text-sm font-mono text-red-600 dark:text-red-400">{entry.debit > 0 ? formatCurrency(entry.debit, entry.currency) : '—'}</td>
-                  <td className="px-5 py-4 text-end text-sm font-mono text-green-600 dark:text-green-400">{entry.credit > 0 ? formatCurrency(entry.credit, entry.currency) : '—'}</td>
-                  <td className="px-5 py-4 text-end text-sm font-mono font-bold text-gray-900 dark:text-white">{formatCurrency(entry.runningBalance, entry.currency)}</td>
+        <ResponsiveDataList
+          rows={ledger}
+          keyField={(entry, idx) => `${entry.reference}-${entry.date}-${idx}`}
+          table={(
+            <table className="w-full">
+              <thead className="bg-gray-50 dark:bg-gray-900/50">
+                <tr>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.ledgerCols.date')}</th>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.ledgerCols.type')}</th>
+                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.ledgerCols.reference')}</th>
+                  <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('suppliers.ledgerCols.debit')}</th>
+                  <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('suppliers.ledgerCols.credit')}</th>
+                  <th className="px-5 py-3 text-end text-xs font-medium text-gray-500 uppercase">{t('suppliers.ledgerCols.runningBalance')}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {ledger.map((entry, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                    <td className="px-5 py-4 text-sm text-gray-500 dark:text-gray-400">{entry.date}</td>
+                    <td className="px-5 py-4 text-sm">
+                      <span className={cn(
+                        'px-2.5 py-1 rounded-full text-xs font-medium',
+                        entry.type === 'order' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                        entry.type === 'payment' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                        entry.type === 'credit_adjustment' ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' :
+                        'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                      )}>
+                        {t('suppliers.ledgerTypes.' + entry.type)}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4 text-sm font-mono text-gray-900 dark:text-white">{entry.reference}</td>
+                    <td className="px-5 py-4 text-end text-sm font-mono text-red-600 dark:text-red-400">{entry.debit > 0 ? formatCurrency(entry.debit, entry.currency) : '—'}</td>
+                    <td className="px-5 py-4 text-end text-sm font-mono text-green-600 dark:text-green-400">{entry.credit > 0 ? formatCurrency(entry.credit, entry.currency) : '—'}</td>
+                    <td className="px-5 py-4 text-end text-sm font-mono font-bold text-gray-900 dark:text-white">{formatCurrency(entry.runningBalance, entry.currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          renderCard={(entry) => (
+            <>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-mono text-sm font-semibold text-gray-900 dark:text-white">{entry.reference}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">{entry.date}</p>
+                </div>
+                <span className={cn(
+                  'rounded-full px-2.5 py-1 text-xs font-medium',
+                  entry.type === 'order' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                  entry.type === 'payment' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                  entry.type === 'credit_adjustment' ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' :
+                  'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                )}>
+                  {t('suppliers.ledgerTypes.' + entry.type)}
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-2 text-center text-xs sm:grid-cols-3">
+                <div>
+                  <p className="text-gray-500">{t('suppliers.ledgerCols.debit')}</p>
+                  <p className="mt-0.5 font-mono text-red-600">{entry.debit > 0 ? formatCurrency(entry.debit, entry.currency) : '—'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">{t('suppliers.ledgerCols.credit')}</p>
+                  <p className="mt-0.5 font-mono text-green-600">{entry.credit > 0 ? formatCurrency(entry.credit, entry.currency) : '—'}</p>
+                </div>
+                <div>
+                  <p className="text-gray-500">{t('suppliers.ledgerCols.runningBalance')}</p>
+                  <p className="mt-0.5 font-mono font-bold text-gray-900 dark:text-white">{formatCurrency(entry.runningBalance, entry.currency)}</p>
+                </div>
+              </div>
+            </>
+          )}
+        />
       )}
     </div>
   )

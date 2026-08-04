@@ -11,6 +11,7 @@ import {
 } from '../../../services/currencyService'
 import type { Currency, ConversionRecord, CalculatorRecord } from '../../../types'
 import { formatDate } from '../../../utils/dateUtils'
+import { applyAgentTax, parseTaxRate } from '../../../utils/agentTax'
 import { toast } from 'sonner'
 
 // ── Tab types ─────────────────────────────────────────────────────────────────
@@ -57,7 +58,7 @@ function CurrencyForm({ initial, onSave, onClose, language, t }: CurrencyFormPro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md shadow-xl">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
         <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
           <h2 className="font-semibold text-gray-900 dark:text-white">
             {initial ? t('calculator.editCurrency') : t('calculator.addCurrency')}
@@ -67,14 +68,14 @@ function CurrencyForm({ initial, onSave, onClose, language, t }: CurrencyFormPro
           </button>
         </div>
         <div className="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">{t('calculator.currencyCode')}</label>
               <input
                 value={form.code}
                 onChange={e => set('code', e.target.value.toUpperCase())}
                 placeholder="USD"
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm font-mono"
+                className="w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-base sm:text-sm font-mono"
               />
             </div>
             <div>
@@ -83,7 +84,7 @@ function CurrencyForm({ initial, onSave, onClose, language, t }: CurrencyFormPro
                 value={form.symbol}
                 onChange={e => set('symbol', e.target.value)}
                 placeholder="$"
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm"
+                className="w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-base sm:text-sm"
               />
             </div>
           </div>
@@ -93,7 +94,7 @@ function CurrencyForm({ initial, onSave, onClose, language, t }: CurrencyFormPro
               value={form.name}
               onChange={e => set('name', e.target.value)}
               dir="rtl"
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm"
+              className="w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-base sm:text-sm"
             />
           </div>
           <div>
@@ -102,7 +103,7 @@ function CurrencyForm({ initial, onSave, onClose, language, t }: CurrencyFormPro
               value={form.nameFr}
               onChange={e => set('nameFr', e.target.value)}
               dir="ltr"
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm"
+              className="w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-base sm:text-sm"
             />
           </div>
           {!form.isBase && (
@@ -200,7 +201,7 @@ function CurrencySelect({ currencies, selected, onChange, label, language }: Cur
 
 // ── Main Calculator page ──────────────────────────────────────────────────────
 export function Calculator() {
-  const { t, language, goods } = useAppStore()
+  const { t, language, goods, agents } = useAppStore()
   const isRTL = language === 'ar'
   const isFr = language === 'fr'
 
@@ -249,6 +250,8 @@ export function Calculator() {
     productsValue: '', transportCost: '', agentCommission: '', packagingCost: '',
     customsCost: '', warehouseCost: '', miscCost: '',
   })
+  const [agentTaxPercent, setAgentTaxPercent] = useState('')
+  const [agentTaxAgentId, setAgentTaxAgentId] = useState('')
   const [shipmentLabel, setShipmentLabel] = useState('')
   const [savedCalcs, setSavedCalcs] = useState<CalculatorRecord[]>(() =>
     calcRecordService.getAll().filter(r => r.type === 'shipment_cost'),
@@ -347,10 +350,21 @@ export function Calculator() {
   }
 
   // ── Shipment cost calc ────────────────────────────────────────────────────
+  const commissionTax = useMemo(() => {
+    const base = parseFloat(shipment.agentCommission) || 0
+    let rate = parseTaxRate(agentTaxPercent)
+    if (agentTaxAgentId) {
+      const ag = agents.find(a => a.id === agentTaxAgentId)
+      if (ag) rate = parseTaxRate(ag.effectiveTaxRate ?? ag.taxRateOverride)
+    }
+    return applyAgentTax(base, rate)
+  }, [shipment.agentCommission, agentTaxPercent, agentTaxAgentId, agents])
+
   const shipmentTotal = useMemo(() => {
-    const vals = Object.values(shipment).map(v => parseFloat(v) || 0)
-    return vals.reduce((a, b) => a + b, 0)
-  }, [shipment])
+    const otherKeys = Object.keys(shipment).filter(k => k !== 'agentCommission') as (keyof typeof shipment)[]
+    const others = otherKeys.reduce((a, k) => a + (parseFloat(shipment[k]) || 0), 0)
+    return others + commissionTax.totalPayable
+  }, [shipment, commissionTax])
 
   const refreshSavedCalcs = useCallback(async () => {
     const all = await calcRecordService.loadAll()
@@ -371,6 +385,9 @@ export function Calculator() {
       for (const [k, v] of Object.entries(shipment)) {
         inputs[k] = parseFloat(v) || 0
       }
+      inputs.agentTaxPercent = commissionTax.taxPercent
+      inputs.agentCommissionTax = commissionTax.taxAmount
+      inputs.agentCommissionTotal = commissionTax.totalPayable
       const when = new Date().toLocaleString(isFr ? 'fr-FR' : 'ar-DZ')
       const label = shipmentLabel.trim() || `${t('calculator.shipmentCost')} · ${when}`
       await calcRecordService.add({
@@ -405,6 +422,9 @@ export function Calculator() {
       next[key] = val != null && val !== 0 ? String(val) : (val === 0 ? '0' : '')
     }
     setShipment(next)
+    const taxPct = rec.inputs.agentTaxPercent
+    setAgentTaxPercent(taxPct != null ? String(taxPct) : '')
+    setAgentTaxAgentId('')
     if (rec.currency) setCalcCurCode(rec.currency)
     setShipmentLabel(rec.label)
     toast.success(t('calculator.loadSaved'))
@@ -523,7 +543,7 @@ export function Calculator() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('calculator.title')}</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{t('calculator.title')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">{t('calculator.manualRatesNote')}</p>
         </div>
         <button
@@ -879,12 +899,60 @@ export function Calculator() {
                         value={shipment[key]}
                         onChange={e => setShipment(s => ({ ...s, [key]: e.target.value }))}
                         placeholder="0"
-                        className={`w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white text-sm font-mono ${isRTL ? 'pr-3 pl-12' : 'pr-12 pl-3'}`}
+                        className={`w-full min-h-11 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white text-base sm:text-sm font-mono ${isRTL ? 'pr-3 pl-12' : 'pr-12 pl-3'}`}
                       />
                       <span className={`absolute top-1/2 -translate-y-1/2 text-xs text-gray-400 font-mono ${isRTL ? 'left-3' : 'right-3'}`}>{calcCur.symbol}</span>
                     </div>
                   </div>
                 ))}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl bg-amber-50/80 dark:bg-amber-900/15 border border-amber-200/60 dark:border-amber-800/40 p-3">
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('calculator.agentTaxPercent')}</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={agentTaxPercent}
+                    onChange={e => { setAgentTaxPercent(e.target.value); setAgentTaxAgentId('') }}
+                    placeholder="0"
+                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('agents.title')}</label>
+                  <select
+                    value={agentTaxAgentId}
+                    onChange={e => {
+                      const id = e.target.value
+                      setAgentTaxAgentId(id)
+                      if (id) {
+                        const ag = agents.find(a => a.id === id)
+                        if (ag) setAgentTaxPercent(String(parseTaxRate(ag.effectiveTaxRate ?? ag.taxRateOverride)))
+                      }
+                    }}
+                    className="w-full px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-sm"
+                  >
+                    <option value="">—</option>
+                    {agents.map(a => (
+                      <option key={a.id} value={a.id}>
+                        {(language === 'fr' && a.nameFr ? a.nameFr : a.name)}
+                        {a.agentType === 'auto_entrepreneur' ? ` (${parseTaxRate(a.effectiveTaxRate)}%)` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {(commissionTax.taxPercent > 0 || commissionTax.base > 0) && (
+                  <div className="sm:col-span-2 flex flex-wrap gap-4 text-sm">
+                    <span className="text-gray-600 dark:text-gray-300">
+                      {t('calculator.agentCommissionTax')}: <strong className="font-mono">{calcCur.symbol} {fmt(commissionTax.taxAmount)}</strong>
+                      {` (${commissionTax.taxPercent}%)`}
+                    </span>
+                    <span className="text-gray-600 dark:text-gray-300">
+                      {t('calculator.agentTotalPayable')}: <strong className="font-mono text-amber-700 dark:text-amber-300">{calcCur.symbol} {fmt(commissionTax.totalPayable)}</strong>
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="pt-3 border-t border-gray-100 dark:border-gray-700 space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -1065,7 +1133,7 @@ export function Calculator() {
                   <h3 className="font-semibold text-blue-700 dark:text-blue-300 mb-4">
                     {t('calculator.shipmentTotals')} ({selectedGoods.length} {isFr ? 'expédition(s)' : 'شحنة'})
                   </h3>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div className="text-center p-3 bg-white dark:bg-gray-800 rounded-xl">
                       <p className="text-xs text-gray-500 mb-1">{t('calculator.totalValue')}</p>
                       <p className="font-bold text-blue-600 dark:text-blue-400 text-sm font-mono">{fmt(goodsTotals.value)} دج</p>

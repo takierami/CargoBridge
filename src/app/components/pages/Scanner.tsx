@@ -42,6 +42,9 @@ interface DiagnosticsInfo {
   activeCamera: string
   streamActive: boolean
   scannerRunning: boolean
+  protocol: string
+  isSecureContext: boolean
+  uaHint: string
 }
 
 interface DebugInfo {
@@ -83,9 +86,24 @@ function classifyError(err: unknown): CameraError {
   if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || msg.includes('permission') || msg.includes('denied') || msg.includes('notallowed')) return 'permission_denied'
   if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || msg.includes('not found') || msg.includes('no camera') || msg.includes('could not start')) return 'no_camera'
   if (name === 'NotReadableError' || name === 'TrackStartError' || msg.includes('already in use') || msg.includes('not readable')) return 'camera_in_use'
-  if (msg.includes('https') || msg.includes('secure origin')) return 'https_required'
-  if (typeof navigator.mediaDevices === 'undefined') return 'browser_incompatible'
+  if (msg.includes('https') || msg.includes('secure origin') || msg.includes('secure context')) return 'https_required'
+  // Insecure HTTP (LAN IP) often lacks mediaDevices entirely — not a "bad browser"
+  if (typeof navigator.mediaDevices === 'undefined') {
+    return typeof window !== 'undefined' && !window.isSecureContext ? 'https_required' : 'browser_incompatible'
+  }
   return 'unknown'
+}
+
+function uaHint(): string {
+  if (typeof navigator === 'undefined') return '—'
+  const ua = navigator.userAgent
+  if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS Safari/WebKit'
+  if (/Android/i.test(ua)) return 'Android Chrome/WebView'
+  if (/Edg\//i.test(ua)) return 'Edge'
+  if (/Chrome\//i.test(ua)) return 'Chrome'
+  if (/Firefox\//i.test(ua)) return 'Firefox'
+  if (/Safari\//i.test(ua)) return 'Safari'
+  return ua.slice(0, 40)
 }
 
 const PERM_COLOR: Record<PermissionStatus, string> = {
@@ -372,9 +390,26 @@ export function Scanner() {
     setCameraError(null)
     setCameraErrorRaw('')
 
-    // Browser compat check
+    // Browsers only show the OS camera prompt in a secure context (HTTPS / localhost).
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      setCameraError('https_required')
+      setCameraErrorRaw(
+        isFr
+          ? `Contexte non sécurisé (${window.location.protocol}//…). Utilisez HTTPS.`
+          : `سياق غير آمن (${window.location.protocol}//…). استخدم HTTPS.`,
+      )
+      setCameraLoading(false)
+      cameraLoadingRef.current = false
+      return
+    }
+
+    // Browser compat check — missing mediaDevices on insecure HTTP → https tip
     if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError('browser_incompatible')
+      setCameraError(
+        typeof window !== 'undefined' && !window.isSecureContext
+          ? 'https_required'
+          : 'browser_incompatible',
+      )
       setCameraLoading(false)
       cameraLoadingRef.current = false
       return
@@ -413,7 +448,7 @@ export function Scanner() {
 
       scannerRef.current = scanner
 
-      // This single call triggers the OS/browser permission dialog
+      // This single call triggers the OS/browser permission dialog (Android / iOS)
       await scanner.start()
 
       // Permission was granted — now safely enumerate cameras (labels are now unlocked)
@@ -513,6 +548,9 @@ export function Scanner() {
     activeCamera: cameras.find(c => c.id === selectedCameraId)?.label ?? (cameras[0]?.label ?? '—'),
     streamActive: cameraActive,
     scannerRunning: scannerReady,
+    protocol: typeof window !== 'undefined' ? window.location.protocol : '—',
+    isSecureContext: typeof window !== 'undefined' ? window.isSecureContext : false,
+    uaHint: uaHint(),
   }
 
   // ── Result helpers ────────────────────────────────────────────────────────
@@ -535,7 +573,7 @@ export function Scanner() {
       {/* ── Header ── */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('scanner.title')}</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{t('scanner.title')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             {t('scanner.subtitle')}
           </p>
@@ -607,6 +645,20 @@ export function Scanner() {
               value={!!navigator.mediaDevices?.getUserMedia ? (isFr ? 'OK' : 'متوافق') : (isFr ? 'Non supporté' : 'غير متوافق')}
               color={!!navigator.mediaDevices?.getUserMedia ? 'text-green-600 dark:text-green-400' : 'text-red-500'}
             />
+            <DiagRow
+              label="protocol"
+              value={diagnostics.protocol}
+              color={diagnostics.isSecureContext ? 'text-green-600 dark:text-green-400' : 'text-red-500'}
+            />
+            <DiagRow
+              label="isSecureContext"
+              value={diagnostics.isSecureContext ? 'true' : 'false'}
+              color={diagnostics.isSecureContext ? 'text-green-600 dark:text-green-400' : 'text-red-500'}
+            />
+            <DiagRow
+              label={isFr ? 'Navigateur' : 'المتصفح'}
+              value={diagnostics.uaHint}
+            />
           </div>
         </div>
       )}
@@ -626,6 +678,13 @@ export function Scanner() {
             <DebugRow label="last_error" value={debugInfo.lastError || '—'} color="text-red-400" />
             <DebugRow label="cameras_count" value={String(cameras.length)} />
             <DebugRow label="selected_camera" value={selectedCameraId || 'auto'} />
+            <DebugRow label="protocol" value={diagnostics.protocol} />
+            <DebugRow
+              label="isSecureContext"
+              value={String(diagnostics.isSecureContext)}
+              color={diagnostics.isSecureContext ? 'text-green-400' : 'text-red-400'}
+            />
+            <DebugRow label="ua" value={diagnostics.uaHint} />
           </div>
         </div>
       )}
@@ -640,7 +699,14 @@ export function Scanner() {
               {/* Video ALWAYS in DOM and never display:none — qr-scanner manipulates video display
                   and will break if it finds display:none on start. We layer overlays on top instead. */}
               <video
-                ref={videoRef}
+                ref={(node) => {
+                  videoRef.current = node
+                  // Older iOS WebKit requires the legacy attribute for inline playback
+                  if (node) {
+                    node.setAttribute('playsinline', 'true')
+                    node.setAttribute('webkit-playsinline', 'true')
+                  }
+                }}
                 muted
                 playsInline
                 className="w-full h-full object-cover"
@@ -675,17 +741,27 @@ export function Scanner() {
 
               {/* Error state */}
               {cameraError && !cameraLoading && (
-                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-gray-900 p-6 text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-red-900/40 flex items-center justify-center">
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-gray-900 p-6 text-center overflow-y-auto">
+                  <div className="w-16 h-16 rounded-2xl bg-red-900/40 flex items-center justify-center shrink-0">
                     {cameraError === 'permission_denied'
                       ? <Shield className="w-8 h-8 text-red-400" />
                       : cameraError === 'no_camera'
                       ? <CameraOff className="w-8 h-8 text-red-400" />
-                      : cameraError === 'browser_incompatible'
+                      : cameraError === 'browser_incompatible' || cameraError === 'https_required'
                       ? <WifiOff className="w-8 h-8 text-red-400" />
                       : <AlertTriangle className="w-8 h-8 text-red-400" />}
                   </div>
                   <p className="text-sm text-red-300 leading-relaxed">{errorMsg}</p>
+                  {cameraError === 'https_required' && (
+                    <p className="text-xs text-amber-200/90 leading-relaxed max-w-xs">
+                      {t('scanner.httpsRequiredTip')}
+                    </p>
+                  )}
+                  {cameraError === 'permission_denied' && (
+                    <p className="text-xs text-amber-200/90 leading-relaxed max-w-xs whitespace-pre-line">
+                      {t('scanner.deniedTips')}
+                    </p>
+                  )}
                   {cameraErrorRaw && (
                     <p className="text-[10px] text-red-500/70 font-mono mt-1 max-w-xs break-all">{cameraErrorRaw}</p>
                   )}
@@ -782,11 +858,14 @@ export function Scanner() {
 
               {/* Permission hint when denied */}
               {permissionStatus === 'denied' && (
-                <p className="text-xs text-red-500 flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5 flex-shrink-0" />
-                  {isFr
-                    ? 'Autorisez la caméra dans les paramètres du navigateur (icône 🔒 dans la barre d\'adresse)'
-                    : 'اسمح بالكاميرا في إعدادات المتصفح (أيقونة 🔒 في شريط العنوان)'}
+                <p className="text-xs text-red-500 whitespace-pre-line leading-relaxed">
+                  <Shield className="w-3.5 h-3.5 flex-shrink-0 inline me-1.5 align-text-bottom" />
+                  {t('scanner.deniedTips')}
+                </p>
+              )}
+              {!window.isSecureContext && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 leading-relaxed">
+                  {t('scanner.httpsRequiredTip')}
                 </p>
               )}
             </div>
@@ -805,12 +884,12 @@ export function Scanner() {
                 onKeyDown={e => e.key === 'Enter' && handleManualSearch()}
                 placeholder={t('scanner.enterTracking')}
                 dir="ltr"
-                className="flex-1 px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                className="flex-1 min-h-11 px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-base sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
               />
               <button
                 onClick={handleManualSearch}
                 disabled={lookupLoading}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                className="min-h-11 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50"
               >
                 {lookupLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                 {t('scanner.scan')}
@@ -1031,10 +1110,11 @@ export function Scanner() {
       {showPermissionDialog && (
         <CameraPermissionDialog
           isFr={isFr}
+          t={t}
           permissionStatus={permissionStatus}
           onAllow={() => {
             setShowPermissionDialog(false)
-            startCamera()
+            void startCamera()
           }}
           onDeny={() => setShowPermissionDialog(false)}
         />
@@ -1045,27 +1125,28 @@ export function Scanner() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function CameraPermissionDialog({ isFr, permissionStatus, onAllow, onDeny }: {
+function CameraPermissionDialog({ isFr, t, permissionStatus, onAllow, onDeny }: {
   isFr: boolean
+  t: (key: string, params?: Record<string, string | number>) => string
   permissionStatus: PermissionStatus
   onAllow: () => void
   onDeny: () => void
 }) {
   const wasDenied = permissionStatus === 'denied'
+  const insecure = typeof window !== 'undefined' && !window.isSecureContext
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div
         dir={isFr ? 'ltr' : 'rtl'}
-        className="bg-white dark:bg-gray-900 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden"
+        className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-3xl bg-white shadow-2xl dark:bg-gray-900"
       >
-        {/* Top illustration */}
         <div className="bg-gradient-to-br from-blue-500 to-blue-700 px-8 pt-10 pb-8 flex flex-col items-center text-center">
           <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center mb-4 ring-4 ring-white/30">
             <Camera className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-white font-bold text-lg leading-snug">
-            {isFr ? 'Accès à la caméra' : 'الوصول إلى الكاميرا'}
+            {t('scanner.cameraPermission')}
           </h2>
           <p className="text-blue-100 text-sm mt-1">
             {isFr ? 'CargoBridge a besoin de la caméra' : 'كارغو بريدج تحتاج إلى الكاميرا'}
@@ -1073,7 +1154,6 @@ function CameraPermissionDialog({ isFr, permissionStatus, onAllow, onDeny }: {
         </div>
 
         <div className="px-6 py-6 space-y-5">
-          {/* Why we need it */}
           <div className="space-y-3">
             {[
               {
@@ -1101,31 +1181,45 @@ function CameraPermissionDialog({ isFr, permissionStatus, onAllow, onDeny }: {
             ))}
           </div>
 
-          {/* Previously denied — extra help */}
+          <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed bg-blue-50 dark:bg-blue-900/20 rounded-xl px-3 py-2.5">
+            {t('scanner.osPromptHint')}
+          </p>
+
+          {insecure && (
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl p-4 space-y-2">
+              <p className="text-amber-800 dark:text-amber-300 font-semibold text-sm">
+                {isFr ? 'HTTPS requis' : 'مطلوب HTTPS'}
+              </p>
+              <p className="text-amber-700 dark:text-amber-400 text-xs leading-relaxed">
+                {t('scanner.httpsRequiredTip')}
+              </p>
+            </div>
+          )}
+
           {wasDenied && (
             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl p-4 space-y-2">
               <p className="text-amber-800 dark:text-amber-300 font-semibold text-sm flex items-center gap-2">
                 <span>⚠️</span>
                 {isFr ? 'Permission précédemment refusée' : 'تم رفض الإذن مسبقاً'}
               </p>
-              <p className="text-amber-700 dark:text-amber-400 text-xs leading-relaxed">
-                {isFr
-                  ? 'Pour autoriser la caméra : cliquez sur l\'icône 🔒 dans la barre d\'adresse de votre navigateur → Autorisations du site → Caméra → Autoriser.'
-                  : 'لتفعيل الكاميرا: انقر على أيقونة 🔒 في شريط العنوان بالمتصفح ← أذونات الموقع ← الكاميرا ← السماح.'}
+              <p className="text-amber-700 dark:text-amber-400 text-xs leading-relaxed whitespace-pre-line">
+                {t('scanner.deniedTips')}
               </p>
             </div>
           )}
 
-          {/* Buttons */}
           <div className="space-y-2.5 pt-1">
             <button
+              type="button"
               onClick={onAllow}
-              className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-semibold text-sm transition-all flex items-center justify-center gap-2.5 shadow-md shadow-blue-200 dark:shadow-blue-900/40"
+              disabled={insecure}
+              className="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-semibold text-sm transition-all flex items-center justify-center gap-2.5 shadow-md shadow-blue-200 dark:shadow-blue-900/40 disabled:opacity-50 disabled:pointer-events-none"
             >
               <Camera className="w-4 h-4" />
               {isFr ? 'Autoriser l\'accès à la caméra' : 'السماح بالوصول إلى الكاميرا'}
             </button>
             <button
+              type="button"
               onClick={onDeny}
               className="w-full py-3 rounded-2xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 font-medium text-sm transition-colors"
             >
@@ -1134,9 +1228,7 @@ function CameraPermissionDialog({ isFr, permissionStatus, onAllow, onDeny }: {
           </div>
 
           <p className="text-center text-xs text-gray-400 dark:text-gray-500">
-            {isFr
-              ? 'Le navigateur affichera sa propre boîte de dialogue de permission.'
-              : 'سيظهر المتصفح نافذته الخاصة لطلب الإذن.'}
+            {t('scanner.privacyNote')}
           </p>
         </div>
       </div>

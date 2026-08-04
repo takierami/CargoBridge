@@ -21,6 +21,7 @@ from .constants import (
 )
 from .models import (
     Agent,
+    AgentTaxRule,
     Currency,
     Goods,
     GoodsCustomsEvent,
@@ -241,7 +242,7 @@ def record_money_audit(
     after: dict | None = None,
     notes: str = '',
 ) -> MoneyAuditEvent:
-    return MoneyAuditEvent.objects.create(
+    event = MoneyAuditEvent.objects.create(
         organization=organization,
         entity_type=entity_type,
         entity_id=entity_id,
@@ -251,6 +252,55 @@ def record_money_audit(
         after=after or {},
         notes=notes or '',
     )
+    # Dual-write into centralized business activity history
+    from api import activity as activity_mod
+    module_map = {
+        'purchase_order': 'purchase_orders',
+        'payment': 'payments',
+        'adjustment': 'adjustments',
+        'supplier': 'suppliers',
+    }
+    action_map = {
+        'create': 'create',
+        'soft_delete': 'soft_delete',
+        'mark_paid': 'mark_paid',
+        'amount_paid_update': 'amount_paid_update',
+        'status_change': 'status_change',
+    }
+    label = ''
+    if after:
+        label = str(after.get('po_number') or after.get('payment_number') or after.get('code') or entity_id)
+    elif before:
+        label = str(before.get('po_number') or before.get('payment_number') or before.get('code') or entity_id)
+    else:
+        label = str(entity_id)
+    supplier_id = None
+    if after:
+        supplier_id = after.get('supplier_id') or after.get('supplier')
+    if not supplier_id and before:
+        supplier_id = before.get('supplier_id') or before.get('supplier')
+    currency = ''
+    if after:
+        currency = str(after.get('currency') or '')
+    elif before:
+        currency = str(before.get('currency') or '')
+    activity_mod.record_activity(
+        organization=organization,
+        module=module_map.get(entity_type, entity_type),
+        action=action_map.get(action, action),
+        user=user,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        entity_label=label[:255],
+        summary=notes or f'{action} {entity_type} {label}',
+        before=before or {},
+        after=after or {},
+        supplier_id=supplier_id,
+        currency=currency,
+        metadata={'money_audit_id': str(event.id), 'notes': notes},
+        use_on_commit=False,
+    )
+    return event
 
 
 def _adjustment_net_base(supplier: Supplier, rates: dict[str, Decimal], base_code: str) -> Decimal:
@@ -327,6 +377,38 @@ def sync_agent_stats(agent: Agent) -> None:
     if total > 0:
         agent.reliability_score = max(0, min(100, int(((total - delayed) / total) * 100)))
     agent.save(update_fields=['total_deliveries', 'delayed_deliveries', 'reliability_score', 'updated_at'])
+
+
+def effective_agent_tax_rate(agent: Agent) -> Decimal:
+    """Return override rate if set, else org tax rule for agent_type, else 0."""
+    if agent.tax_rate_override is not None:
+        return Decimal(agent.tax_rate_override)
+    rule = (
+        AgentTaxRule.objects.filter(
+            organization=agent.organization,
+            agent_type=agent.agent_type,
+            is_active=True,
+        )
+        .only('tax_percent')
+        .first()
+    )
+    if rule is None:
+        return Decimal('0')
+    return Decimal(rule.tax_percent)
+
+
+def apply_agent_tax(commission, rate) -> dict:
+    """Pure breakdown: base, tax_percent, tax_amount, total_payable."""
+    base = Decimal(str(commission or 0))
+    pct = Decimal(str(rate or 0))
+    tax_amount = (base * pct / Decimal('100')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    total = (base + tax_amount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    return {
+        'base': base,
+        'tax_percent': pct,
+        'tax_amount': tax_amount,
+        'total_payable': total,
+    }
 
 
 def build_supplier_ledger(supplier: Supplier) -> list[dict]:
@@ -489,20 +571,33 @@ def advance_po_along_path(
     return current
 
 
-def office_for_role(role: str | None) -> str:
-    if role == 'china_admin':
+def office_for_role(role: str | None, office: str | None = None) -> str:
+    if office == 'china' or role == 'china_admin':
         return 'China Office'
-    if role == 'algeria_admin':
+    if office == 'algeria' or role == 'algeria_admin':
         return 'Algeria Office'
+    if office:
+        return f'{office.title()} Office'
     return ''
 
 
-def allowed_next_statuses(current_status: str, role: str | None) -> list[dict]:
+def _status_cap_set(*, office: str | None = None, role: str | None = None) -> set:
+    from .constants import GOODS_OFFICE_ALLOWED_STATUSES
+    if office and office in GOODS_OFFICE_ALLOWED_STATUSES:
+        return GOODS_OFFICE_ALLOWED_STATUSES[office]
+    return GOODS_ROLE_ALLOWED_STATUSES.get(role or '', set())
+
+
+def allowed_next_statuses(
+    current_status: str,
+    role: str | None = None,
+    office: str | None = None,
+) -> list[dict]:
     candidates = GOODS_STATUS_FLOW.get(current_status, [])
-    role_set = GOODS_ROLE_ALLOWED_STATUSES.get(role or '', set())
+    cap = _status_cap_set(office=office, role=role)
     result = []
     for status_code in candidates:
-        if role and status_code not in role_set:
+        if (role or office) and status_code not in cap:
             continue
         action_key = GOODS_STATUS_ACTION_KEYS.get(status_code, status_code)
         if current_status == 'delivered' and status_code == 'warehouse':
@@ -532,9 +627,12 @@ def apply_customs_status_update(
     *,
     new_status: str,
     role: str | None,
+    office: str | None = None,
     user=None,
     notes: str = '',
 ) -> tuple[bool, str | None, Goods | None]:
+    from .constants import CUSTOMS_OFFICE_ALLOWED_STATUSES
+
     if goods.status not in CUSTOMS_ALLOWED_GOODS_STATUSES:
         return (
             False,
@@ -542,7 +640,10 @@ def apply_customs_status_update(
             f'(current={goods.status}).',
             None,
         )
-    role_set = CUSTOMS_ROLE_ALLOWED_STATUSES.get(role or '', set())
+    if office and office in CUSTOMS_OFFICE_ALLOWED_STATUSES:
+        role_set = CUSTOMS_OFFICE_ALLOWED_STATUSES[office]
+    else:
+        role_set = CUSTOMS_ROLE_ALLOWED_STATUSES.get(role or '', set())
     if new_status not in role_set:
         return False, 'Your role cannot set this customs status.', None
     if not can_transition_customs(goods.customs_status, new_status):
@@ -578,6 +679,25 @@ def apply_customs_status_update(
             to_status=new_status,
             user=user if getattr(user, 'is_authenticated', False) else None,
             notes=notes or '',
+        )
+        from api import activity as activity_mod
+        activity_mod.record_activity(
+            organization=locked.organization,
+            module='goods',
+            action='customs_change',
+            user=user,
+            entity_type='goods',
+            entity_id=locked.id,
+            entity_label=locked.tracking_number or str(locked.id),
+            summary=notes or f'Customs {old} → {new_status}',
+            before={'customs_status': old},
+            after={'customs_status': new_status},
+            changed_fields=['customs_status'],
+            agent_id=locked.agent_id,
+            goods_id=locked.id,
+            status=locked.status,
+            related_url=f'/goods/{locked.id}',
+            use_on_commit=False,
         )
         return True, None, locked
 
@@ -621,7 +741,7 @@ def record_tracking_event(
     latitude=None,
     longitude=None,
 ) -> GoodsTrackingEvent:
-    return GoodsTrackingEvent.objects.create(
+    event = GoodsTrackingEvent.objects.create(
         organization=goods.organization,
         goods=goods,
         from_status=from_status or '',
@@ -633,6 +753,31 @@ def record_tracking_event(
         latitude=latitude,
         longitude=longitude,
     )
+    from api import activity as activity_mod
+    activity_mod.record_activity(
+        organization=goods.organization,
+        module='goods',
+        action='status_change' if from_status else 'create',
+        user=user,
+        entity_type='goods',
+        entity_id=goods.id,
+        entity_label=goods.tracking_number or str(goods.id),
+        summary=notes or f'Status {from_status or "—"} → {to_status}',
+        before={'status': from_status or ''},
+        after={'status': to_status, 'office': office or ''},
+        changed_fields=['status'],
+        agent_id=goods.agent_id,
+        goods_id=goods.id,
+        status=to_status,
+        metadata={
+            'tracking_event_id': str(event.id),
+            'office': office or '',
+            'photos_count': len(photos or []),
+        },
+        related_url=f'/goods/{goods.id}',
+        use_on_commit=False,
+    )
+    return event
 
 
 def record_scan_log(
@@ -646,7 +791,7 @@ def record_scan_log(
     to_status: str = '',
     notes: str = '',
 ) -> GoodsScanLog:
-    return GoodsScanLog.objects.create(
+    log = GoodsScanLog.objects.create(
         organization=goods.organization,
         goods=goods,
         qr=qr,
@@ -657,6 +802,26 @@ def record_scan_log(
         to_status=to_status or '',
         notes=notes or '',
     )
+    from api import activity as activity_mod
+    activity_mod.record_activity(
+        organization=goods.organization,
+        module='goods',
+        action='scan',
+        user=user,
+        entity_type='goods',
+        entity_id=goods.id,
+        entity_label=goods.tracking_number or str(goods.id),
+        summary=notes or f'Scan: {action}',
+        before={'status': from_status},
+        after={'status': to_status or goods.status, 'scan_action': action},
+        goods_id=goods.id,
+        agent_id=goods.agent_id,
+        status=to_status or goods.status,
+        metadata={'scan_log_id': str(log.id), 'device': device or ''},
+        related_url=f'/goods/{goods.id}',
+        use_on_commit=False,
+    )
+    return log
 
 
 def serialize_tracking_event(event: GoodsTrackingEvent) -> dict:
@@ -677,7 +842,15 @@ def serialize_tracking_event(event: GoodsTrackingEvent) -> dict:
     }
 
 
-def public_track_payload(goods: Goods, role: str | None = None) -> dict:
+def public_track_payload(
+    goods: Goods,
+    role: str | None = None,
+    office: str | None = None,
+    *,
+    authenticated: bool | None = None,
+) -> dict:
+    """Public QR payload. Monetary / media fields only for authenticated org users."""
+    is_auth = bool(authenticated) if authenticated is not None else bool(role or office)
     agent_name = ''
     if goods.agent_id:
         agent_name = goods.agent.name
@@ -689,9 +862,9 @@ def public_track_payload(goods: Goods, role: str | None = None) -> dict:
     token = str(qr.token) if qr and qr.is_active else None
     consistent, last_event_status = goods_status_consistency(goods)
     allowed = []
-    if role and consistent:
-        allowed = allowed_next_statuses(goods.status, role)
-    return {
+    if is_auth and consistent:
+        allowed = allowed_next_statuses(goods.status, role=role, office=office)
+    payload = {
         'token': token,
         'tracking_number': goods.tracking_number,
         'description': goods.description,
@@ -699,28 +872,40 @@ def public_track_payload(goods: Goods, role: str | None = None) -> dict:
         'category': goods.category,
         'quantity': goods.quantity,
         'weight': float(goods.weight) if goods.weight is not None else None,
-        'value': float(goods.value) if goods.value is not None else None,
         'status': goods.status,
         'priority': goods.priority,
         'transport_type': goods.transport_type,
-        'agent_name': agent_name,
-        'hs_code': goods.hs_code,
-        'incoterm': goods.incoterm,
+        'agent_name': agent_name if is_auth else '',
+        'hs_code': goods.hs_code if is_auth else '',
+        'incoterm': goods.incoterm if is_auth else '',
         'customs_status': goods.customs_status,
-        'landed_cost': float(compute_landed_cost(goods)),
-        'value_currency': goods.value_currency,
         'departure_date': goods.departure_date.isoformat() if goods.departure_date else None,
         'expected_arrival_date': goods.expected_arrival_date.isoformat() if goods.expected_arrival_date else None,
         'arrival_date': goods.arrival_date.isoformat() if goods.arrival_date else None,
-        'notes': goods.notes,
-        'photos': goods.photos or [],
         'created_at': goods.created_at.isoformat(),
         'timeline': events,
         'allowed_actions': allowed,
-        'authenticated': bool(role),
+        'authenticated': is_auth,
         'status_consistent': consistent,
         'last_event_status': last_event_status,
     }
+    if is_auth:
+        payload.update({
+            'value': float(goods.value) if goods.value is not None else None,
+            'landed_cost': float(compute_landed_cost(goods)),
+            'value_currency': goods.value_currency,
+            'notes': goods.notes,
+            'photos': goods.photos or [],
+        })
+    else:
+        payload.update({
+            'value': None,
+            'landed_cost': None,
+            'value_currency': None,
+            'notes': '',
+            'photos': [],
+        })
+    return payload
 
 
 def apply_goods_status_update(
@@ -729,6 +914,7 @@ def apply_goods_status_update(
     new_status: str,
     user,
     role: str | None,
+    office: str | None = None,
     notes: str = '',
     photos: list | None = None,
     latitude=None,
@@ -750,7 +936,7 @@ def apply_goods_status_update(
     if getattr(goods, 'is_deleted', False):
         return False, 'Shipment is deleted.', None
 
-    role_set = GOODS_ROLE_ALLOWED_STATUSES.get(role or '', set())
+    role_set = _status_cap_set(office=office, role=role)
     if new_status not in role_set:
         return False, 'Your role cannot set this shipment status.', None
     if not can_transition_goods(goods.status, new_status):
@@ -799,7 +985,7 @@ def apply_goods_status_update(
             from_status=old_status,
             to_status=new_status,
             user=user,
-            office=office_for_role(role),
+            office=office_for_role(role, office),
             notes=event_notes,
             photos=photos,
             latitude=lat,

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router'
 import { useAppStore } from '../../../store/appStore'
 import { computeAnalytics } from '../../../services/analyticsService'
 import { cn } from '../../utils/cn'
+import { ResponsiveDataList } from '../ui/ResponsiveDataList'
 
 function StarRatingDisplay({ rating }: { rating: number }) {
   const stars = Math.round(rating)
@@ -74,7 +75,7 @@ export function Analytics() {
   return (
     <div className="p-4 lg:p-6 space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('suppliers.analytics')}</h1>
+        <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{t('suppliers.analytics')}</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400">{t('suppliers.analyticsDescription')}</p>
       </div>
 
@@ -108,54 +109,75 @@ export function Analytics() {
         {analytics.topSuppliersByReliability.length === 0 ? (
           <div className="px-5 py-12 text-center text-gray-500 dark:text-gray-400 text-sm">{t('common.noData')}</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900/50">
-                <tr>
-                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.supplierName')}</th>
-                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.overallScore')}</th>
-                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.onTimeRate')}</th>
-                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.receivedOrders')}</th>
-                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.totalSpend')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {analytics.topSuppliersByReliability.map((s) => {
-                  const valueData = analytics.topSuppliersByValue.find(v => v.supplierId === s.supplierId)
-                  return (
-                    <tr
-                      key={s.supplierId}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate(`/suppliers/${s.supplierId}`)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          navigate(`/suppliers/${s.supplierId}`)
-                        }
-                      }}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-900/50 cursor-pointer"
-                    >
-                      <td className="px-5 py-4">
-                        <span className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">{s.supplierName}</span>
-                      </td>
-                      <td className="px-5 py-4">
-                        {s.rating ? <StarRatingDisplay rating={s.rating} /> : <span className="text-gray-400 text-xs">—</span>}
-                      </td>
-                      <td className="px-5 py-4 min-w-32">
-                        <div className="flex items-center gap-2">
-                          <PercentBar value={s.onTimeRate} color={s.onTimeRate >= 80 ? 'bg-green-500' : s.onTimeRate >= 50 ? 'bg-amber-500' : 'bg-red-500'} />
-                          <span className="text-xs text-gray-600 dark:text-gray-400 w-10">{s.onTimeRate}%</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{s.receivedCount}</td>
-                      <td className="px-5 py-4 text-sm font-mono text-gray-900 dark:text-white">{formatCurrency(valueData?.totalValue || 0)}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveDataList
+            rows={analytics.topSuppliersByReliability}
+            keyField={(s) => s.supplierId}
+            table={(
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-900/50">
+                  <tr>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.supplierName')}</th>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.overallScore')}</th>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.onTimeRate')}</th>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.receivedOrders')}</th>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.totalSpend')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {analytics.topSuppliersByReliability.map((s) => {
+                    const valueData = analytics.topSuppliersByValue.find(v => v.supplierId === s.supplierId)
+                    return (
+                      <tr
+                        key={s.supplierId}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navigate(`/suppliers/${s.supplierId}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            navigate(`/suppliers/${s.supplierId}`)
+                          }
+                        }}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-900/50 cursor-pointer"
+                      >
+                        <td className="px-5 py-4">
+                          <span className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">{s.supplierName}</span>
+                        </td>
+                        <td className="px-5 py-4">
+                          {s.rating ? <StarRatingDisplay rating={s.rating} /> : <span className="text-gray-400 text-xs">—</span>}
+                        </td>
+                        <td className="px-5 py-4 min-w-32">
+                          <div className="flex items-center gap-2">
+                            <PercentBar value={s.onTimeRate} color={s.onTimeRate >= 80 ? 'bg-green-500' : s.onTimeRate >= 50 ? 'bg-amber-500' : 'bg-red-500'} />
+                            <span className="text-xs text-gray-600 dark:text-gray-400 w-10">{s.onTimeRate}%</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{s.receivedCount}</td>
+                        <td className="px-5 py-4 text-sm font-mono text-gray-900 dark:text-white">{formatCurrency(valueData?.totalValue || 0)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+            renderCard={(s) => {
+              const valueData = analytics.topSuppliersByValue.find(v => v.supplierId === s.supplierId)
+              return (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/suppliers/${s.supplierId}`)}
+                  className="w-full text-start"
+                >
+                  <p className="font-medium text-blue-600 dark:text-blue-400">{s.supplierName}</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    {s.rating ? <StarRatingDisplay rating={s.rating} /> : <span className="text-xs text-gray-400">—</span>}
+                    <span className="text-xs text-gray-500">{s.onTimeRate}% · {s.receivedCount}</span>
+                  </div>
+                  <p className="mt-2 font-mono text-sm text-gray-900 dark:text-white">{formatCurrency(valueData?.totalValue || 0)}</p>
+                </button>
+              )
+            }}
+          />
         )}
       </div>
 
@@ -167,58 +189,76 @@ export function Analytics() {
         {analytics.largestBalances.length === 0 ? (
           <div className="px-5 py-12 text-center text-gray-500 dark:text-gray-400 text-sm">{t('common.noData')}</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900/50">
-                <tr>
-                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.supplierName')}</th>
-                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.totalPOs')}</th>
-                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.totalPaid')}</th>
-                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.totalOutstanding')}</th>
-                  <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.overduePOs')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {analytics.largestBalances.map((s) => {
-                  const maxOut = analytics.largestBalances[0]?.outstanding || 1
-                  return (
-                    <tr
-                      key={s.supplierId}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate(`/suppliers/${s.supplierId}`)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          navigate(`/suppliers/${s.supplierId}`)
-                        }
-                      }}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-900/50 cursor-pointer"
-                    >
-                      <td className="px-5 py-4">
-                        <span className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">{s.supplierName}</span>
-                      </td>
-                      <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{s.totalPurchased > 0 ? Math.round(s.totalPurchased / 1000) + 'K' : 0}</td>
-                      <td className="px-5 py-4 text-sm font-mono text-gray-900 dark:text-white">{formatCurrency(s.totalPaid)}</td>
-                      <td className="px-5 py-4 min-w-36">
-                        <div className="flex items-center gap-2">
-                          <PercentBar value={s.outstanding} max={maxOut} color="bg-red-500" />
-                          <span className="text-sm font-mono text-gray-900 dark:text-white w-20">{formatCurrency(s.outstanding)}</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-4">
-                        {s.overduePayments > 0 ? (
-                          <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-xs font-medium">{s.overduePayments}</span>
-                        ) : (
-                          <span className="text-gray-400 text-xs">0</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveDataList
+            rows={analytics.largestBalances}
+            keyField={(s) => s.supplierId}
+            table={(
+              <table className="w-full">
+                <thead className="bg-gray-50 dark:bg-gray-900/50">
+                  <tr>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.supplierName')}</th>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.totalPOs')}</th>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.totalPaid')}</th>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.totalOutstanding')}</th>
+                    <th className="px-5 py-3 text-start text-xs font-medium text-gray-500 uppercase">{t('suppliers.overduePOs')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {analytics.largestBalances.map((s) => {
+                    const maxOut = analytics.largestBalances[0]?.outstanding || 1
+                    return (
+                      <tr
+                        key={s.supplierId}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navigate(`/suppliers/${s.supplierId}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            navigate(`/suppliers/${s.supplierId}`)
+                          }
+                        }}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-900/50 cursor-pointer"
+                      >
+                        <td className="px-5 py-4">
+                          <span className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline">{s.supplierName}</span>
+                        </td>
+                        <td className="px-5 py-4 text-sm text-gray-600 dark:text-gray-400">{s.totalPurchased > 0 ? Math.round(s.totalPurchased / 1000) + 'K' : 0}</td>
+                        <td className="px-5 py-4 text-sm font-mono text-gray-900 dark:text-white">{formatCurrency(s.totalPaid)}</td>
+                        <td className="px-5 py-4 min-w-36">
+                          <div className="flex items-center gap-2">
+                            <PercentBar value={s.outstanding} max={maxOut} color="bg-red-500" />
+                            <span className="text-sm font-mono text-gray-900 dark:text-white w-20">{formatCurrency(s.outstanding)}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4">
+                          {s.overduePayments > 0 ? (
+                            <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-xs font-medium">{s.overduePayments}</span>
+                          ) : (
+                            <span className="text-gray-400 text-xs">0</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+            renderCard={(s) => (
+              <button type="button" onClick={() => navigate(`/suppliers/${s.supplierId}`)} className="w-full text-start">
+                <p className="font-medium text-blue-600 dark:text-blue-400">{s.supplierName}</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-gray-500">
+                  <span>{t('suppliers.totalPaid')}: <span className="font-mono text-gray-900 dark:text-white">{formatCurrency(s.totalPaid)}</span></span>
+                  <span>{t('suppliers.totalOutstanding')}: <span className="font-mono text-red-600">{formatCurrency(s.outstanding)}</span></span>
+                </div>
+                {s.overduePayments > 0 && (
+                  <span className="mt-2 inline-block rounded bg-red-100 px-2 py-1 text-xs font-medium text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                    {s.overduePayments} {t('suppliers.overduePOs')}
+                  </span>
+                )}
+              </button>
+            )}
+          />
         )}
       </div>
     </div>

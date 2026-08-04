@@ -1,0 +1,17 @@
+[Unit]
+Description=CargoBridge Django API (gunicorn)
+After=network.target
+
+[Service]
+Type=simple
+User=<YOUR_VPS_USERNAME>
+Group=<YOUR_VPS_USERNAME>
+WorkingDirectory=<PATH_TO_PROJECT>/backend
+EnvironmentFile=<PATH_TO_PROJECT>/backend/.env
+# Ensure /run/cargobridge.sock parent is writable, or change bind in gunicorn_config.py
+ExecStart=<PATH_TO_PROJECT>/backend/.venv/bin/gunicorn -c gunicorn_config.py cargobridge.wsgi:application
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

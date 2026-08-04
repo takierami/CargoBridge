@@ -1,7 +1,13 @@
 # Dependencies
 node_modules/
+
+# Virtualenvs (root or backend)
+.venv/
+venv/
+.venv-fresh/
 backend/.venv/
 backend/venv/
+
 __pycache__/
 *.py[cod]
 
@@ -15,6 +21,10 @@ backend/.env.*
 
 # Build output (Netlify builds this fresh from source)
 dist/
+
+# Django collectstatic + gunicorn logs (backend deploy artifacts)
+backend/staticfiles/
+backend/logs/
 
 # Logs / debug artifacts
 *.log

@@ -29,9 +29,13 @@ interface AppStore {
   language: Language
   theme: Theme
   role: UserRole
+  office: import('../types').UserOffice
   companyName: string
   companyNameFr: string
-  sidebarOpen: boolean
+  /** Desktop rail collapsed (persisted). */
+  sidebarCollapsed: boolean
+  /** Mobile drawer open (ephemeral, not persisted). */
+  mobileNavOpen: boolean
   isDataLoading: boolean
   dataError: string | null
 
@@ -58,10 +62,14 @@ interface AppStore {
   setLanguage: (lang: Language) => void
   setTheme: (theme: Theme) => void
   setRole: (role: UserRole) => void
+  setOffice: (office: import('../types').UserOffice) => void
   setCompanyName: (name: string) => void
   setCompanyNameFr: (name: string) => void
-  toggleSidebar: () => void
-  setSidebarOpen: (open: boolean) => void
+  clearTenantState: () => void
+  toggleSidebarCollapsed: () => void
+  setSidebarCollapsed: (collapsed: boolean) => void
+  setMobileNavOpen: (open: boolean) => void
+  toggleMobileNav: () => void
 
   loadGoods: () => Promise<void>
   addGoods: (data: Omit<Goods, 'id' | 'createdAt' | 'trackingNumber'>) => Promise<Goods>
@@ -90,6 +98,7 @@ interface AppStore {
   addSupplierTemplate: (data: Omit<SupplierDocumentTemplate, 'id' | 'createdAt'>) => Promise<SupplierDocumentTemplate>
   updateSupplierTemplate: (id: string, data: Partial<SupplierDocumentTemplate>) => Promise<SupplierDocumentTemplate | null>
   deleteSupplierTemplate: (id: string) => Promise<void>
+  duplicateSupplierTemplate: (id: string) => Promise<SupplierDocumentTemplate>
 
   loadSuppliers: () => Promise<void>
   addSupplier: (data: Omit<Supplier, 'id' | 'code' | 'createdAt' | 'updatedAt'>) => Promise<Supplier>
@@ -155,10 +164,12 @@ export const useAppStore = create<AppStore>()(
     (set, get) => ({
       language: 'ar',
       theme: 'light',
-      role: 'china_admin',
+      role: 'admin',
+      office: 'china',
       companyName: 'كارغو بريدج',
       companyNameFr: 'CargoBridge',
-      sidebarOpen: true,
+      sidebarCollapsed: false,
+      mobileNavOpen: false,
       isDataLoading: false,
       dataError: null,
       goods: [],
@@ -190,10 +201,39 @@ export const useAppStore = create<AppStore>()(
         document.documentElement.classList.toggle('dark', theme === 'dark')
       },
       setRole: (role) => set({ role }),
+      setOffice: (office) => set({ office }),
       setCompanyName: (companyName) => set({ companyName }),
       setCompanyNameFr: (companyNameFr) => set({ companyNameFr }),
-      toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
-      setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+      clearTenantState: () => set({
+        role: 'admin',
+        office: 'china',
+        companyName: '',
+        companyNameFr: '',
+        goods: [],
+        agents: [],
+        notifications: [],
+        templates: [],
+        supplierTemplates: [],
+        suppliers: [],
+        supplierProducts: [],
+        supplierCategories: [],
+        purchaseOrders: [],
+        purchaseOrderItems: [],
+        priceHistory: [],
+        supplierPayments: [],
+        supplierAdjustments: [],
+        supplierDocuments: [],
+        supplierCommunications: [],
+        supplierTasks: [],
+        supplierRatings: [],
+        dataError: null,
+        isDataLoading: false,
+        mobileNavOpen: false,
+      }),
+      toggleSidebarCollapsed: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
+      setMobileNavOpen: (mobileNavOpen) => set({ mobileNavOpen }),
+      toggleMobileNav: () => set((s) => ({ mobileNavOpen: !s.mobileNavOpen })),
 
       loadGoods: async () => set({ goods: await goodsService.getAll() }),
       addGoods: async (data) => { const c = await goodsService.create(data); await get().loadGoods(); return c },
@@ -229,6 +269,7 @@ export const useAppStore = create<AppStore>()(
       addSupplierTemplate: async (data) => { const c = await supplierTemplateService.create(data); await get().loadSupplierTemplates(); return c },
       updateSupplierTemplate: async (id, data) => { const c = await supplierTemplateService.update(id, data); await get().loadSupplierTemplates(); return c },
       deleteSupplierTemplate: async (id) => { await supplierTemplateService.delete(id); await get().loadSupplierTemplates() },
+      duplicateSupplierTemplate: async (id) => { const c = await supplierTemplateService.duplicate(id); await get().loadSupplierTemplates(); return c },
 
       loadSuppliers: async () => set({ suppliers: await supplierService.getAll() }),
       addSupplier: async (data) => { const c = await supplierService.create(data); await get().loadSuppliers(); return c },
@@ -419,6 +460,7 @@ export const useAppStore = create<AppStore>()(
             companyName: data.organization.name,
             companyNameFr: data.organization.nameFr,
             role: (data.user.profile.role as UserRole) || get().role,
+            office: (data.user.profile.office as import('../types').UserOffice) || get().office,
             isDataLoading: false,
           })
         } catch (e) {
@@ -441,7 +483,7 @@ export const useAppStore = create<AppStore>()(
         theme: state.theme,
         companyName: state.companyName,
         companyNameFr: state.companyNameFr,
-        sidebarOpen: state.sidebarOpen,
+        sidebarCollapsed: state.sidebarCollapsed,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) state.t = createT(state.language)

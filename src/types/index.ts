@@ -12,20 +12,100 @@ export type GoodsStatus =
   | 'cancelled'
 
 export type AgentStatus = 'active' | 'traveling' | 'delivered' | 'delayed' | 'inactive'
+export type AgentType = 'standard' | 'auto_entrepreneur'
+export type AgentEmploymentStatus = 'active' | 'inactive' | 'suspended'
+export type AgentPreferredChannel = 'phone' | 'whatsapp' | 'email' | 'other'
 export type Language = 'ar' | 'fr'
 export type Theme = 'light' | 'dark'
-export type UserRole = 'china_admin' | 'algeria_admin'
+export type UserRole = 'owner' | 'admin' | 'manager' | 'employee' | 'readonly'
+/** @deprecated Legacy office-admin labels — prefer UserRole + UserOffice */
+export type LegacyUserRole = 'china_admin' | 'algeria_admin'
+export type UserOffice = 'china' | 'algeria'
 export type Priority = 'low' | 'medium' | 'high'
 export type NotificationType = 'goods' | 'agent' | 'chat' | 'system'
 export type TemplateType = 'reception' | 'delivery' | 'general'
 
+export type BusinessStatus = 'open' | 'closing_soon' | 'closed'
+export type TimeFormat = '12h' | '24h'
+
+export interface BusinessHoursConfig {
+  open: string
+  close: string
+  closingSoonEnd: string
+}
+
+export interface TradeCity {
+  id: string
+  name: string
+  nameAr: string
+  nameFr: string
+  country: string
+  countryAr: string
+  countryFr: string
+  flag: string
+  ianaTimeZone: string
+  region: 'algeria' | 'china' | 'uae' | 'turkey' | 'europe'
+  defaultBusinessHours: BusinessHoursConfig
+}
+
+export interface TradeTimePreferences {
+  enabledCityIds: string[]
+  cityOrder: string[]
+  pinnedCityIds: string[]
+  timeFormat: TimeFormat
+  businessHoursOverrides: Record<string, BusinessHoursConfig>
+}
+
+export interface CityTimeSnapshot {
+  city: TradeCity
+  localTime: string
+  utcOffset: string
+  offsetFromAlgiers: number
+  offsetLabel: string
+  businessStatus: BusinessStatus
+  businessHours: BusinessHoursConfig
+  isDaytime: boolean
+}
+
 export interface Agent {
   id: string
-  name: string        // Arabic name (primary)
-  nameFr?: string     // French transliteration
+  code?: string
+  name: string
+  nameFr?: string
+  nameEn?: string
+  companyName?: string
+  agentType?: AgentType
+  employmentStatus?: AgentEmploymentStatus
   phone: string
+  phoneAlt?: string
+  whatsapp?: string
+  email?: string
+  website?: string
+  preferredChannel?: AgentPreferredChannel
   passport: string
+  passportExpiry?: string | null
+  nationalId?: string
+  businessRegistrationNumber?: string
+  taxId?: string
   country: string
+  stateProvince?: string
+  city?: string
+  postalCode?: string
+  address?: string
+  preferredCurrency?: string
+  commissionRate?: number | null
+  taxRateOverride?: number | null
+  effectiveTaxRate?: number | string
+  preferredPaymentMethod?: string
+  bankName?: string
+  bankAccount?: string
+  iban?: string
+  swift?: string
+  languages?: string[]
+  services?: string[]
+  operatingCountries?: string[]
+  primaryTradeRegion?: string
+  yearsExperience?: number | null
   status: AgentStatus
   reliabilityScore: number
   totalDeliveries: number
@@ -33,6 +113,16 @@ export interface Agent {
   createdAt: string
   lastActive?: string
   notes?: string
+  internalNotes?: string
+}
+
+export interface AgentTaxRule {
+  id: string
+  agentType: AgentType
+  taxPercent: number | string
+  labelAr?: string
+  labelFr?: string
+  isActive?: boolean
 }
 
 export interface Goods {
@@ -72,7 +162,7 @@ export interface Message {
   conversationId: string
   senderId: string
   senderName: string
-  senderRole: UserRole
+  senderRole: UserRole | LegacyUserRole | string
   content: string
   timestamp: string
   type: 'text' | 'image' | 'voice'
@@ -272,6 +362,9 @@ export interface SupplierDocumentTemplate {
   id: string
   templateName: string
   templateBody: string
+  systemKey?: string | null
+  kind?: 'buying' | 'payment' | 'custom'
+  isDeleted?: boolean
   createdAt: string
 }
 

@@ -9,6 +9,7 @@ from rest_framework import serializers
 from .mixins import OrgScopedSerializerMixin
 from .models import (
     Agent,
+    AgentTaxRule,
     CalculatorRecord,
     ConversionRecord,
     Currency,
@@ -51,18 +52,27 @@ def _normalize_date_value(value):
 
 
 class AgentSerializer(serializers.ModelSerializer):
+    effective_tax_rate = serializers.SerializerMethodField()
+
     class Meta:
         model = Agent
         fields = '__all__'
         read_only_fields = [
-            'id', 'organization', 'reliability_score', 'total_deliveries',
-            'delayed_deliveries', 'created_at', 'updated_at',
+            'id', 'organization', 'code', 'reliability_score', 'total_deliveries',
+            'delayed_deliveries', 'is_deleted', 'deleted_by', 'deleted_at',
+            'created_at', 'updated_at', 'effective_tax_rate',
         ]
+
+    def get_effective_tax_rate(self, obj):
+        from . import services
+        return float(services.effective_agent_tax_rate(obj))
 
     def validate_phone(self, value):
         phone = (value or '').strip()
         if not phone:
             raise serializers.ValidationError('Phone is required.')
+        if len(phone) < 6:
+            raise serializers.ValidationError('Phone is too short.')
         return phone
 
     def validate_passport(self, value):
@@ -70,6 +80,15 @@ class AgentSerializer(serializers.ModelSerializer):
         if not passport:
             raise serializers.ValidationError('Passport is required.')
         return passport
+
+    def validate_passport_expiry(self, value):
+        return _normalize_date_value(value)
+
+    def validate_email(self, value):
+        return (value or '').strip()
+
+    def validate_website(self, value):
+        return (value or '').strip()
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
@@ -81,9 +100,18 @@ class AgentSerializer(serializers.ModelSerializer):
             profile = getattr(request.user, 'profile', None)
             org = getattr(profile, 'organization', None)
 
+        for key in (
+            'name', 'name_fr', 'name_en', 'company_name', 'phone', 'phone_alt',
+            'whatsapp', 'email', 'website', 'passport', 'national_id',
+            'business_registration_number', 'tax_id', 'country', 'state_province',
+            'city', 'postal_code', 'bank_name', 'bank_account', 'iban', 'swift',
+        ):
+            if key in attrs and isinstance(attrs[key], str):
+                attrs[key] = attrs[key].strip()
+
         phone = attrs.get('phone', getattr(self.instance, 'phone', None))
         passport = attrs.get('passport', getattr(self.instance, 'passport', None))
-        qs = Agent.objects.all()
+        qs = Agent.objects.filter(is_deleted=False)
         if org is not None:
             qs = qs.filter(organization=org)
         if self.instance is not None:
@@ -97,6 +125,13 @@ class AgentSerializer(serializers.ModelSerializer):
         if errors:
             raise serializers.ValidationError(errors)
         return attrs
+
+
+class AgentTaxRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgentTaxRule
+        fields = '__all__'
+        read_only_fields = ['id', 'organization', 'created_at', 'updated_at']
 
 
 class GoodsSerializer(OrgScopedSerializerMixin, serializers.ModelSerializer):
@@ -179,7 +214,7 @@ class SupplierDocumentTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = SupplierDocumentTemplate
         fields = '__all__'
-        read_only_fields = ['id', 'organization', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'organization', 'system_key', 'created_at', 'updated_at']
 
 
 class SupplierSerializer(serializers.ModelSerializer):

@@ -50,14 +50,23 @@ GOODS_AGENT_REQUIRED_STATUSES = {
     'delivered',
 }
 
-# Role caps for goods status transitions (QR + update_status) — both admins share full set
+# Office caps for goods status transitions (QR + update_status) — both offices share full set
 _GOODS_ADMIN_STATUSES = {
     'assigned', 'ready_for_departure', 'in_transit', 'cancelled', 'draft',
     'arrived', 'delayed', 'warehouse', 'delivered',
 }
+GOODS_OFFICE_ALLOWED_STATUSES = {
+    'china': set(_GOODS_ADMIN_STATUSES),
+    'algeria': set(_GOODS_ADMIN_STATUSES),
+}
+# Legacy role keys (tests / old clients) — same caps
 GOODS_ROLE_ALLOWED_STATUSES = {
     'china_admin': set(_GOODS_ADMIN_STATUSES),
     'algeria_admin': set(_GOODS_ADMIN_STATUSES),
+    'owner': set(_GOODS_ADMIN_STATUSES),
+    'admin': set(_GOODS_ADMIN_STATUSES),
+    'manager': set(_GOODS_ADMIN_STATUSES),
+    'employee': set(_GOODS_ADMIN_STATUSES),
 }
 
 # Friendly action keys for QR UI (locale resolves labels)
@@ -93,9 +102,17 @@ CUSTOMS_STATUS_FLOW = {
     'cleared': [],
 }
 
+CUSTOMS_OFFICE_ALLOWED_STATUSES = {
+    'china': {'pending', 'cleared', 'held'},
+    'algeria': {'pending', 'cleared', 'held'},
+}
 CUSTOMS_ROLE_ALLOWED_STATUSES = {
     'algeria_admin': {'pending', 'cleared', 'held'},
     'china_admin': {'pending', 'cleared', 'held'},
+    'owner': {'pending', 'cleared', 'held'},
+    'admin': {'pending', 'cleared', 'held'},
+    'manager': {'pending', 'cleared', 'held'},
+    'employee': {'pending', 'cleared', 'held'},
 }
 
 # Customs clearance only once shipment has reached Algeria-side stages

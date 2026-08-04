@@ -9,7 +9,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date
 from decimal import Decimal
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 from django.db import connection
 from django.test import TransactionTestCase
 from rest_framework.test import APIClient
@@ -23,7 +25,7 @@ class ConcurrentBalanceProofTests(TransactionTestCase):
     def setUp(self):
         self.org = Organization.objects.create(name='Conc Org')
         self.algeria = User.objects.create_user(username='conc_alg', password='StrongPass1!')
-        UserProfile.objects.create(user=self.algeria, organization=self.org, role='algeria_admin')
+        UserProfile.objects.create(user=self.algeria, organization=self.org, role='admin', office='algeria')
         Currency.objects.create(
             organization=self.org,
             code='USD',

@@ -22,6 +22,10 @@ export const supplierTemplateService = {
     await api.delete(`/supplier-templates/${id}/`)
   },
 
+  async duplicate(id: string): Promise<SupplierDocumentTemplate> {
+    return api.post<SupplierDocumentTemplate>(`/supplier-templates/${id}/duplicate/`, {})
+  },
+
   async reset(): Promise<void> {
     await api.post('/reset/')
   },

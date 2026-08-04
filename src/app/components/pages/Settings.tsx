@@ -1,11 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Sun, Moon, Globe, User, Bell, Database, Building2, Check, AlertTriangle, FileText, ChevronRight } from 'lucide-react'
+import { Sun, Moon, Globe, User, Bell, Database, Building2, Check, AlertTriangle, FileText, ChevronRight, Clock3, UserPlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/appStore'
 import { useAuthStore } from '../../../store/authStore'
 import { cn } from '../../utils/cn'
-import type { Language, Theme } from '../../../types'
+import type { Language, Theme, UserOffice, UserRole } from '../../../types'
+import { TradeTimeSettings } from '../trade-time/TradeTimeSettings'
+import { INPUT_TOUCH } from '../ui/responsive'
+import { isOrgAdmin } from '../../../lib/roles'
+import { api } from '../../../lib/apiClient'
 
 function SettingSection({ title, icon: Icon, children }: {
   title: string; icon: React.ElementType; children: React.ReactNode
@@ -48,10 +52,11 @@ function ToggleRow({ label, description, checked, onChange }: {
 
 export function Settings() {
   const {
-    t, language, theme, role, companyName, companyNameFr, templates,
-    setLanguage, setTheme, setRole, setCompanyName, setCompanyNameFr, resetData,
+    t, language, theme, role, office, companyName, companyNameFr, templates,
+    setLanguage, setTheme, setCompanyName, setCompanyNameFr, resetData,
   } = useAppStore()
   const navigate = useNavigate()
+  const canManageOrg = isOrgAdmin(role)
 
   const [localCompanyName, setLocalCompanyName] = useState(companyName)
   const [localCompanyNameFr, setLocalCompanyNameFr] = useState(companyNameFr)
@@ -61,6 +66,10 @@ export function Settings() {
   const [showResetConfirm, setShowResetConfirm] = useState(false)
 
   const handleSaveCompany = async () => {
+    if (!canManageOrg) {
+      toast.error(language === 'ar' ? 'غير مسموح' : 'Non autorisé')
+      return
+    }
     try {
       await useAuthStore.getState().updateProfile({
         companyName: localCompanyName,
@@ -107,7 +116,7 @@ export function Settings() {
   return (
     <div className="p-4 lg:p-6 space-y-5 max-w-2xl mx-auto">
       <div>
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('settings.title')}</h1>
+        <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{t('settings.title')}</h1>
       </div>
 
       {/* Company */}
@@ -118,7 +127,7 @@ export function Settings() {
             <input
               value={localCompanyName}
               onChange={e => setLocalCompanyName(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={INPUT_TOUCH}
             />
           </div>
           <div>
@@ -128,13 +137,14 @@ export function Settings() {
               onChange={e => setLocalCompanyNameFr(e.target.value)}
               dir="ltr"
               placeholder="ex: CargoBridge"
-              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={INPUT_TOUCH}
             />
           </div>
           <div>
             <button
               onClick={handleSaveCompany}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              disabled={!canManageOrg}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
             >
               {t('common.save')}
             </button>
@@ -147,29 +157,25 @@ export function Settings() {
         <div>
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('settings.currentRole')}</p>
           <div className="grid grid-cols-2 gap-3">
-            <OptionCard
-              value="china_admin"
-              current={role}
-              label={t('settings.roles.china_admin')}
-              onClick={() => undefined}
-              color="bg-red-100 dark:bg-red-900/30 text-red-600"
-              disabled
-            />
-            <OptionCard
-              value="algeria_admin"
-              current={role}
-              label={t('settings.roles.algeria_admin')}
-              onClick={() => undefined}
-              color="bg-green-100 dark:bg-green-900/30 text-green-600"
-              disabled
-            />
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm">
+              <p className="text-xs text-gray-500 mb-1">{t('settings.memberRole')}</p>
+              <p className="font-medium text-gray-900 dark:text-white">{t(`settings.roles.${role}`)}</p>
+            </div>
+            <div className="rounded-xl border border-gray-200 dark:border-gray-700 px-4 py-3 text-sm">
+              <p className="text-xs text-gray-500 mb-1">{t('settings.memberOffice')}</p>
+              <p className="font-medium text-gray-900 dark:text-white">
+                {office === 'algeria' ? t('settings.offices.algeria') : t('settings.offices.china')}
+              </p>
+            </div>
           </div>
           <p className="text-xs text-amber-600 dark:text-amber-400 mt-2 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" />
-            {language === 'ar' ? 'يتم تعيين الدور من طرف مسؤول النظام' : 'Le rôle est attribué par un administrateur système'}
+            {language === 'ar' ? 'الدور والمكتب يُعيَّنان من المالك أو المسؤول' : 'Rôle et bureau attribués par le propriétaire / admin'}
           </p>
         </div>
       </SettingSection>
+
+      {canManageOrg && <MembersSection />}
 
       {/* Language */}
       <SettingSection title={t('settings.languageSettings')} icon={Globe}>
@@ -211,6 +217,13 @@ export function Settings() {
             color="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600"
           />
         </div>
+      </SettingSection>
+
+      <SettingSection
+        title={language === 'ar' ? 'مناطق توقيت التجارة العالمية' : 'Fuseaux horaires du commerce mondial'}
+        icon={Clock3}
+      >
+        <TradeTimeSettings />
       </SettingSection>
 
       {/* Notifications */}
@@ -297,9 +310,121 @@ export function Settings() {
         {/* Version info */}
         <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between text-xs text-gray-400">
           <span>CargoBridge</span>
-          <span>{t('settings.version')} 1.0.0 • Phase 1 (Local Storage)</span>
+          <span>{t('settings.version')} 1.0.0</span>
         </div>
       </SettingSection>
     </div>
+  )
+}
+
+interface MemberRow {
+  id: string
+  username: string
+  email: string
+  role: UserRole
+  office: UserOffice
+}
+
+function MembersSection() {
+  const { t, language } = useAppStore()
+  const [members, setMembers] = useState<MemberRow[]>([])
+  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [role, setRole] = useState<UserRole>('employee')
+  const [office, setOffice] = useState<UserOffice>('china')
+  const [busy, setBusy] = useState(false)
+
+  const load = async () => {
+    try {
+      const rows = await api.get<MemberRow[]>('/auth/members/')
+      setMembers(rows)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  const invite = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      await api.post('/auth/members/', { username, email, password, role, office })
+      toast.success(t('settings.inviteSuccess'))
+      setUsername('')
+      setEmail('')
+      setPassword('')
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t('common.error'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <SettingSection title={t('settings.members')} icon={UserPlus}>
+      <ul className="mb-4 space-y-2">
+        {members.map((m) => (
+          <li
+            key={m.id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 dark:border-gray-700 px-3 py-2 text-sm"
+          >
+            <div>
+              <p className="font-medium text-gray-900 dark:text-white">{m.username}</p>
+              <p className="text-xs text-gray-500">{m.email}</p>
+            </div>
+            <div className="text-xs text-gray-600 dark:text-gray-300">
+              {t(`settings.roles.${m.role}`)} · {m.office === 'algeria' ? t('settings.offices.algeria') : t('settings.offices.china')}
+            </div>
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={invite} className="grid gap-2 sm:grid-cols-2">
+        <input
+          required
+          placeholder={language === 'ar' ? 'اسم المستخدم' : "Nom d'utilisateur"}
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          className={INPUT_TOUCH}
+        />
+        <input
+          required
+          type="email"
+          placeholder={t('settings.memberEmail')}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className={INPUT_TOUCH}
+          dir="ltr"
+        />
+        <input
+          required
+          type="password"
+          placeholder={t('settings.memberPassword')}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className={INPUT_TOUCH}
+        />
+        <select value={role} onChange={(e) => setRole(e.target.value as UserRole)} className={INPUT_TOUCH}>
+          {(['admin', 'manager', 'employee', 'readonly'] as UserRole[]).map((r) => (
+            <option key={r} value={r}>{t(`settings.roles.${r}`)}</option>
+          ))}
+        </select>
+        <select value={office} onChange={(e) => setOffice(e.target.value as UserOffice)} className={INPUT_TOUCH}>
+          <option value="china">{t('settings.offices.china')}</option>
+          <option value="algeria">{t('settings.offices.algeria')}</option>
+        </select>
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {t('settings.inviteMember')}
+        </button>
+      </form>
+    </SettingSection>
   )
 }

@@ -1,4 +1,6 @@
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
 from django.test import TestCase
 from rest_framework.test import APIClient
 
@@ -11,9 +13,9 @@ class GoodsStatusIntegrityTests(TestCase):
     def setUp(self):
         self.org = Organization.objects.create(name='Test Org')
         self.china = User.objects.create_user(username='china_u', password='StrongPass1!')
-        UserProfile.objects.create(user=self.china, organization=self.org, role='china_admin')
+        UserProfile.objects.create(user=self.china, organization=self.org, role='admin', office='china')
         self.algeria = User.objects.create_user(username='algeria_u', password='StrongPass1!')
-        UserProfile.objects.create(user=self.algeria, organization=self.org, role='algeria_admin')
+        UserProfile.objects.create(user=self.algeria, organization=self.org, role='admin', office='algeria')
         self.agent = Agent.objects.create(
             organization=self.org,
             name='Agent',

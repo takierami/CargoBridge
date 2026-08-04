@@ -66,31 +66,31 @@ export function GoodsDetail() {
   }
 
   const InfoRow = ({ label, value }: { label: string; value: React.ReactNode }) => (
-    <div className="flex items-start gap-3 py-2.5 border-b border-gray-100 dark:border-gray-700 last:border-0">
-      <span className="text-sm text-gray-500 dark:text-gray-400 w-36 flex-shrink-0">{label}</span>
-      <span className="text-sm text-gray-900 dark:text-white font-medium flex-1">{value || '—'}</span>
+    <div className="flex flex-col gap-0.5 border-b border-gray-100 py-2.5 last:border-0 dark:border-gray-700 sm:flex-row sm:items-start sm:gap-3">
+      <span className="text-sm text-gray-500 dark:text-gray-400 sm:w-36 sm:flex-shrink-0">{label}</span>
+      <span className="min-w-0 flex-1 break-words text-sm font-medium text-gray-900 dark:text-white">{value || '—'}</span>
     </div>
   )
 
   return (
     <div className="p-4 lg:p-6 space-y-5">
-      <div className="flex items-center gap-3">
-        <button onClick={() => navigate('/goods')} className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <button type="button" onClick={() => navigate('/goods')} className="min-h-11 min-w-11 self-start inline-flex items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500">
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-bold text-gray-900 dark:text-white">{item.description}</h1>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">{item.description}</h1>
             <StatusBadge status={item.status} type="goods" label={t(`goods.statuses.${item.status}`)} />
             <PriorityBadge priority={item.priority} label={t(`goods.priorities.${item.priority}`)} />
           </div>
           <p className="text-sm text-blue-600 dark:text-blue-400 font-mono mt-0.5">{item.trackingNumber}</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="grid grid-cols-2 gap-2 w-full sm:w-auto sm:flex sm:flex-wrap">
           {isOrgAdmin(role) && (
             <button
               onClick={() => setShowEdit(true)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium transition-colors"
+              className="min-h-11 flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-50 dark:bg-gray-900/40 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium transition-colors"
             >
               <Pencil className="w-4 h-4" />
               {t('common.edit')}
@@ -106,7 +106,7 @@ export function GoodsDetail() {
                   toast.error(err instanceof Error ? err.message : t('common.error'))
                 }
               }}
-              className="flex items-center gap-1.5 px-3 py-2 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded-lg text-sm font-medium transition-colors"
+              className="min-h-11 flex items-center justify-center gap-1.5 px-3 py-2 bg-violet-50 dark:bg-violet-900/20 hover:bg-violet-100 dark:hover:bg-violet-900/30 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 rounded-lg text-sm font-medium transition-colors"
             >
               <QrCode className="w-4 h-4" />
               {t('goods.generateQr')}
@@ -114,14 +114,14 @@ export function GoodsDetail() {
           )}
           <button
             onClick={() => { setReceiptType('reception'); setShowReceipt(true) }}
-            className="flex items-center gap-1.5 px-3 py-2 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-lg text-sm font-medium transition-colors"
+            className="min-h-11 flex items-center justify-center gap-1.5 px-3 py-2 bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800 rounded-lg text-sm font-medium transition-colors"
           >
             <Receipt className="w-4 h-4" />
             {t('receipts.generateReceipt')}
           </button>
           <button
             onClick={() => { setReceiptType('delivery'); setShowReceipt(true) }}
-            className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg text-sm font-medium transition-colors"
+            className="min-h-11 flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-lg text-sm font-medium transition-colors"
           >
             <Receipt className="w-4 h-4" />
             {t('receipts.generateDelivery')}
